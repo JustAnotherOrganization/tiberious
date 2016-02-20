@@ -1,16 +1,15 @@
 language: go
-
 cache: apt
-
 sudo: false
-
 go:
-  - 1.5
-
+- 1.5
 install:
-  - go get github.com/gorilla/websocket
-  - go get gopkg.in/redis.v3
-
+- go get github.com/gorilla/websocket
+- go get gopkg.in/redis.v3
 script:
-  - mv $GOPATH/src/github.com/JustAnotherOrganization/tiberious $GOPATH/src
-  - go build
+- mv $GOPATH/src/github.com/JustAnotherOrganization/tiberious $GOPATH/src
+- cd $GOPATH/src/tiberious
+- go build
+notifications:
+  slack:
+    secure: KsgNLeGLHVUSIZk2MtkS3ZrIAhNCJVom+HkUlZEJzvn19B/Ty6Ei27oihKsIAQAY88BCQqTmqC/Jd7TPjqY+gaAydtqT4aWQ0GeoXYkDdj1fOpSWpOkTrRspW/FKYTGijQOkfaBDqluEIIPKRZD6yKpQ5JNOBTrhvlTY0dGyhkW1SOWuM5naubibr32aKOKRmyB6r9TSgIOELYftgBPXCd8YG6nSj9MCbVWs9ehNkhhd6QwgdMse7o9ojd3O7+B8G+MJBrs2wl9WJ81NzZK5lCdpYx5Bo/8IcBhIvjbmiUxrtjqbfcwNPPB4CoCeJ4jONKJDoCiVLecGqmga6yuyNABNtjXaia+nh8UXywmZHzhk4QuGFFoyebLzWogdnH1rg0y7jrPxyWpbJ0JO711o/IUsunfhGMQyZLVqnKtaity3hr0O2ZxILjn76GqjL9QzE4Ji/vqPbNTeixOylDf/fD+nkEDRI+9ZRLB1Dk2ny99ALcyYOoI1mIXbkQYrtjNECRRxvQtNvIqOE4h/1tkBLIz3SZq5eFvlFfY2/TNvWJAj1aWjq7J03Cf3mUNO0azdH6jGewLfJlWTV5w7U6zAQ2KbHmGMvAWWDaAjy4q79o7e5vXi4L2gkWx0HiVmCSOO6Y2LD4OoPrxFLZ0o1dNq1JSbdq1ZYDeiFHnlZCUlP2E=
