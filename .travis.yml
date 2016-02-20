@@ -13,4 +13,5 @@ install:
 
 script:
   - mv $GOPATH/src/github.com/JustAnotherOrganization/tiberious $GOPATH/src
+  - cd $GOPATH/src/tiberious
   - go build
