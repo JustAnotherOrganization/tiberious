@@ -1,0 +1,16 @@
+language: go
+
+cache: apt
+
+sudo: false
+
+go:
+  - 1.5
+
+install:
+  - go get github.com/gorilla/websocket
+  - go get gopkg.in/redis.v3
+
+script:
+  - mv $GOPATH/src/github.com/JustAnotherOrganization/tiberious $GOPATH/src
+  - go build
