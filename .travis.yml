@@ -5,7 +5,7 @@ go:
 - 1.5
 install:
 - go get github.com/gorilla/websocket
-- go get gopkg.in/redis.v3
+- go get github.com/pborman/uuid
 script:
 - mv $GOPATH/src/github.com/JustAnotherOrganization/tiberious $GOPATH/src
 - cd $GOPATH/src/tiberious
