@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"tiberious/types"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/pborman/uuid"
@@ -21,7 +22,7 @@ func ClientHandler(conn *websocket.Conn) {
 
 	log.Println("client", client.ID, "connected")
 
-	alert, err := json.Marshal(types.AlertMin{Response: 200})
+	alert, err := json.Marshal(types.AlertMin{Response: 200, Time: time.Now().Unix()})
 	if err != nil {
 		/* Uncertain if this should be fatal or not, invalid
 		 * operation on the server side should definitely cause
@@ -48,6 +49,20 @@ func ClientHandler(conn *websocket.Conn) {
 			return
 		}
 
+		if message.Time <= 0 {
+			errfull, err := json.Marshal(types.ErrorFull{Response: 400, Time: time.Now().Unix(), Error: "missing or invalid time"})
+			if err != nil {
+				/* TODO implement better internal error handling in case JSON
+				 * marshalling fails for some reason. */
+				log.Fatalln(err)
+			}
+
+			client.Conn.WriteMessage(websocket.BinaryMessage, errfull)
+			// TODO better logging.
+			log.Println("missing or invalid time")
+			return
+		}
+
 		switch {
 		case message.Action == "msg":
 			/* TODO parse the destination and if the destination exists
@@ -58,7 +73,7 @@ func ClientHandler(conn *websocket.Conn) {
 			client.Conn.WriteMessage(websocket.BinaryMessage, p)
 			break
 		default:
-			errmin, err := json.Marshal(types.ErrorMin{Response: 400})
+			errmin, err := json.Marshal(types.ErrorMin{Response: 400, Time: time.Now().Unix()})
 			if err != nil {
 				/* Uncertain if this should be fatal or not, invalid
 				 * operation on the server side should definitely cause
