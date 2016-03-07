@@ -1,0 +1,6 @@
+port: ":4002"
+readbuffer: 1024
+writebuffer: 1024
+messagestore: false
+messageexpire: 0
+messageoverflow: 0

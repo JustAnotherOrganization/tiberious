@@ -5,18 +5,20 @@ import (
 	"net/http"
 
 	"tiberious/handlers"
+	"tiberious/types"
 
 	"github.com/gorilla/websocket"
 )
 
-// TODO benchmark and tune buffer-sizes
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
+var config types.Config
 
 // TODO move this into a separate handler of some form.
 func newConnection(w http.ResponseWriter, r *http.Request) {
+	var upgrader = websocket.Upgrader{
+		ReadBufferSize:  config.ReadBufferSize,
+		WriteBufferSize: config.WriteBufferSize,
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
@@ -27,11 +29,12 @@ func newConnection(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	handlers.InitConfig(&config)
+
 	http.HandleFunc("/", http.NotFound)
 	http.HandleFunc("/ws", newConnection)
-	var port = ":4002"
-	log.Println("Starting Tiberious on", port)
-	if err := http.ListenAndServe(port, nil); err != nil {
+	log.Println("Starting Tiberious on", config.Port)
+	if err := http.ListenAndServe(config.Port, nil); err != nil {
 		log.Fatalln(err)
 	}
 }

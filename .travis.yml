@@ -6,6 +6,7 @@ go:
 install:
 - go get github.com/gorilla/websocket
 - go get github.com/pborman/uuid
+- go get gopkg.in/yaml.v2
 script:
 - mv $GOPATH/src/github.com/JustAnotherOrganization/tiberious $GOPATH/src
 - cd $GOPATH/src/tiberious
