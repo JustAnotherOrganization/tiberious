@@ -4,6 +4,7 @@ package types
 type MasterObj struct {
 	// Found in all objects
 	Action string `json:"action"`
+	Time   int64  `json:"time"`
 	// Only found in message objects
 	To   string `json:"to"`
 	From string `json:"from"`
