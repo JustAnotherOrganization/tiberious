@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"tiberious/handlers"
+	"tiberious/settings"
 	"tiberious/types"
 
 	"github.com/gorilla/websocket"
@@ -28,9 +29,11 @@ func newConnection(w http.ResponseWriter, r *http.Request) {
 	go handlers.ClientHandler(conn)
 }
 
-func main() {
-	handlers.InitConfig(&config)
+func init() {
+	config = settings.GetConfig()
+}
 
+func main() {
 	http.HandleFunc("/", http.NotFound)
 	http.HandleFunc("/ws", newConnection)
 	log.Println("Starting Tiberious on", config.Port)
