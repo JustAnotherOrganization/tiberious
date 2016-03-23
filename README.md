@@ -1,5 +1,5 @@
 # Tiberious
-[![Build Status](https://travis-ci.org/JustAnotherOrganization/tiberious.svg?branch=master)](https://travis-ci.org/JustAnotherOrganization/tiberious)
+[![Build Status](https://travis-ci.org/JustAnotherOrganization/tiberious.svg?branch=master)](https://travis-ci.org/JustAnotherOrganization/tiberious) [![Issue Count](https://codeclimate.com/github/JustAnotherOrganization/tiberious/badges/issue_count.svg)](https://codeclimate.com/github/JustAnotherOrganization/tiberious)
 
 ---
 
