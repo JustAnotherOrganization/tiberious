@@ -45,6 +45,18 @@ func ClientHandler(conn *websocket.Conn) {
 
 	client.Conn.WriteMessage(websocket.BinaryMessage, alert)
 
+	/* TODO we may want to remove this later it's just for easy testing.
+	 * to allow a client to get their UUID back from the server after
+	 * connecting. */
+	info, err := json.Marshal(types.AlertFull{Response: 100, Time: time.Now().Unix(), Alert: string("Connected with ID " + client.ID.String())})
+	if err != nil {
+		/* TODO like the above and other places we need better error handling
+		 * for this. */
+		log.Fatalln(err)
+	}
+
+	client.Conn.WriteMessage(websocket.BinaryMessage, info)
+
 	for {
 		_, p, err := client.Conn.ReadMessage()
 		if err != nil {
