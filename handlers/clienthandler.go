@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"strings"
-	"time"
 
 	"tiberious/settings"
 	"tiberious/types"
@@ -34,8 +33,7 @@ func ClientHandler(conn *websocket.Conn) {
 	clients[client.ID.String()] = client
 	log.Println("client", client.ID, "connected")
 
-	alert, err := json.Marshal(types.AlertMin{Response: 200, Time: time.Now().Unix()})
-	if err != nil {
+	if err := client.Alert(200, ""); err != nil {
 		/* Uncertain if this should be fatal or not, invalid
 		 * operation on the server side should definitely cause
 		 * some form of error presentation to the administrator
@@ -43,19 +41,14 @@ func ClientHandler(conn *websocket.Conn) {
 		log.Fatalln(err)
 	}
 
-	client.Conn.WriteMessage(websocket.BinaryMessage, alert)
-
 	/* TODO we may want to remove this later it's just for easy testing.
 	 * to allow a client to get their UUID back from the server after
 	 * connecting. */
-	info, err := json.Marshal(types.AlertFull{Response: 100, Time: time.Now().Unix(), Alert: string("Connected with ID " + client.ID.String())})
-	if err != nil {
+	if err := client.Alert(100, string("Connected with ID "+client.ID.String())); err != nil {
 		/* TODO like the above and other places we need better error handling
 		 * for this. */
 		log.Fatalln(err)
 	}
-
-	client.Conn.WriteMessage(websocket.BinaryMessage, info)
 
 	// Never return from this loop unless disconnecting the client...
 	for {
@@ -74,15 +67,11 @@ func ClientHandler(conn *websocket.Conn) {
 		}
 
 		if message.Time <= 0 {
-			errfull, err := json.Marshal(types.ErrorFull{Response: 400, Time: time.Now().Unix(), Error: "missing or invalid time"})
-			if err != nil {
+			if err := client.Error(400, "missing or invalid time"); err != nil {
 				/* TODO implement better internal error handling in case JSON
 				 * marshalling fails for some reason. */
 				log.Fatalln(err)
 			}
-
-			client.Conn.WriteMessage(websocket.BinaryMessage, errfull)
-			log.Println("returned", string(errfull), "to client", client.ID.String())
 			continue
 		}
 
@@ -104,13 +93,10 @@ func ClientHandler(conn *websocket.Conn) {
 				 * of said channel) */
 				rexists, room := GetRoom(message.To)
 				if !rexists {
-					errmin, err := json.Marshal(types.ErrorMin{Response: 404, Time: time.Now().Unix()})
-					if err != nil {
-						// LOGGING
+					if err := client.Error(404, ""); err != nil {
+						// TODO LOGGING
 						log.Fatalln(err)
 					}
-
-					client.Conn.WriteMessage(websocket.BinaryMessage, errmin)
 					continue
 				}
 				// TODO should this be handled in a channel or goroutine?
@@ -136,25 +122,19 @@ func ClientHandler(conn *websocket.Conn) {
 					break
 				}
 
-				errmin, err := json.Marshal(types.ErrorMin{Response: 404, Time: time.Now().Unix()})
-				if err != nil {
+				if err := client.Error(404, ""); err != nil {
 					// TODO afforementioned logging/error handling.
 					log.Fatalln(err)
 				}
 
-				client.Conn.WriteMessage(websocket.BinaryMessage, errmin)
-				log.Println("returned", string(errmin), "to client", client.ID.String())
 				continue
 			}
 
 			// Send a response back saying the message was sent.
-			alertmin, err := json.Marshal(types.AlertMin{Response: 200, Time: time.Now().Unix()})
-			if err != nil {
+			if err := client.Alert(200, ""); err != nil {
 				// TODO this needs to be replaced with proper logging/handling.
 				log.Fatalln(err)
 			}
-
-			client.Conn.WriteMessage(websocket.BinaryMessage, alertmin)
 
 			break
 		case message.Action == "join":
@@ -168,13 +148,11 @@ func ClientHandler(conn *websocket.Conn) {
 
 			room[client.ID.String()] = client
 			// Send a response back confirming we joined the room..
-			alertmin, err := json.Marshal(types.AlertMin{Response: 200, Time: time.Now().Unix()})
-			if err != nil {
+			if err := client.Alert(200, ""); err != nil {
 				// TODO this needs to be replaced with proper logging/handling.
 				log.Fatalln(err)
 			}
 
-			client.Conn.WriteMessage(websocket.BinaryMessage, alertmin)
 			break
 		case message.Action == "leave":
 		case message.Action == "part":
@@ -182,12 +160,9 @@ func ClientHandler(conn *websocket.Conn) {
 			var room types.Room
 			rexists, room = GetRoom(message.Room)
 			if !rexists {
-				errmin, err := json.Marshal(types.ErrorMin{Response: 404, Time: time.Now().Unix()})
-				if err != nil {
+				if err := client.Error(404, ""); err != nil {
 					log.Fatalln(err)
 				}
-				client.Conn.WriteMessage(websocket.BinaryMessage, errmin)
-				log.Println("return", string(errmin), "to client", client.ID.String())
 				break
 			}
 
@@ -201,37 +176,29 @@ func ClientHandler(conn *websocket.Conn) {
 
 			if !ispresent {
 				// TODO should this return a different error number?
-				errmin, err := json.Marshal(types.ErrorMin{Response: 410, Time: time.Now().Unix()})
-				if err != nil {
+				if err := client.Error(410, ""); err != nil {
 					log.Fatalln(err)
 				}
-				client.Conn.WriteMessage(websocket.BinaryMessage, errmin)
-				log.Println("returned", string(errmin), "to client", client.ID.String())
 				break
 			}
 
 			delete(room, client.ID.String())
 
 			// Send a response back confirming we left the room..
-			alertmin, err := json.Marshal(types.AlertMin{Response: 200, Time: time.Now().Unix()})
-			if err != nil {
+			if err := client.Alert(200, ""); err != nil {
 				// TODO this needs to be replaced with proper logging/handling.
 				log.Fatalln(err)
 			}
 
-			client.Conn.WriteMessage(websocket.BinaryMessage, alertmin)
 			break
 		default:
-			errmin, err := json.Marshal(types.ErrorMin{Response: 400, Time: time.Now().Unix()})
-			if err != nil {
+			if err := client.Error(400, ""); err != nil {
 				/* Uncertain if this should be fatal or not, invalid
 				 * operation on the server side should definitely cause
 				 * some form of error presentation to the administrator
 				 * but I'm uncertain about full shutdown. */
 				log.Fatalln(err)
 			}
-			client.Conn.WriteMessage(websocket.BinaryMessage, errmin)
-			log.Println("returned", string(errmin), "to client", client.ID.String())
 			break
 		}
 	}
