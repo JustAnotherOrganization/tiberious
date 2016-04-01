@@ -5,30 +5,21 @@ import (
 	"log"
 	"strings"
 
-	"tiberious/settings"
 	"tiberious/types"
 
 	"github.com/gorilla/websocket"
-	"github.com/pborman/uuid"
 )
 
 var (
-	config  types.Config
 	clients = make(map[string]*types.Client)
 )
-
-func init() {
-	config = settings.GetConfig()
-}
 
 // ClientHandler handles all client interactions
 func ClientHandler(conn *websocket.Conn) {
 	client := types.NewClient()
 	client.Conn = conn
-
-	/* TODO store UUID in a datastore of some sort (redis would work but
-	 * database type should be configurable in datastore handler). */
-	client.ID = uuid.NewRandom()
+	// Set the UUID and initialize a username of "guest"
+	NewUser(client)
 
 	clients[client.ID.String()] = client
 	log.Println("client", client.ID, "connected")
@@ -50,6 +41,8 @@ func ClientHandler(conn *websocket.Conn) {
 		log.Fatalln(err)
 	}
 
+	// TODO handle authentication for servers with user databases.
+
 	// Never return from this loop unless disconnecting the client...
 	for {
 		_, p, err := client.Conn.ReadMessage()
@@ -61,8 +54,9 @@ func ClientHandler(conn *websocket.Conn) {
 
 		var message types.MasterObj
 		if err := json.Unmarshal(p, &message); err != nil {
-			// TODO return 400, bad object.
-			log.Println("invalid object from", client.ID.String(), ":", err)
+			if err := client.Error(400, "invalid object"); err != nil {
+				log.Fatalln(err)
+			}
 			continue
 		}
 
