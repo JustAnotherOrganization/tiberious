@@ -2,7 +2,6 @@ package types
 
 import (
 	"encoding/json"
-	"tiberious/logger"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -41,7 +40,6 @@ func (c Client) Alert(code int, message string) error {
 		return err
 	}
 
-	logger.Info("returned", string(ret), "to client", c.ID.String())
 	c.Conn.WriteMessage(websocket.BinaryMessage, ret)
 	return nil
 }
@@ -60,7 +58,6 @@ func (c Client) Error(code int, message string) error {
 		return err
 	}
 
-	logger.Info("returned", string(ret), "to client", c.ID.String())
 	c.Conn.WriteMessage(websocket.BinaryMessage, ret)
 	return nil
 }
