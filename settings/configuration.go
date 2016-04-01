@@ -2,8 +2,8 @@ package settings
 
 import (
 	"io/ioutil"
-	"log"
 	"path/filepath"
+	"tiberious/logger"
 	"tiberious/types"
 
 	"gopkg.in/yaml.v2"
@@ -15,20 +15,20 @@ func init() {
 	// If no config file is found set defaults.
 	configfile, err := filepath.Abs("./config.yml")
 	if err != nil {
-		log.Println(err)
+		logger.Info(err)
 		setDefaults()
 		return
 	}
 	// If unable to read the file set defaults.
 	configyaml, err := ioutil.ReadFile(configfile)
 	if err != nil {
-		log.Println(err)
+		logger.Info(err)
 		setDefaults()
 		return
 	}
 	// If unable to parse the yaml set defaults.
 	if err := yaml.Unmarshal([]byte(configyaml), &config); err != nil {
-		log.Println(err)
+		logger.Info(err)
 		setDefaults()
 	}
 }

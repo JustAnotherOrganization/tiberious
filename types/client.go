@@ -2,7 +2,7 @@ package types
 
 import (
 	"encoding/json"
-	"log"
+	"tiberious/logger"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -27,6 +27,7 @@ func NewClient() (client *Client) {
 	return &Client{}
 }
 
+// Alert handles both full and minimal alerts.
 func (c Client) Alert(code int, message string) error {
 	var ret []byte
 	var err error
@@ -40,11 +41,12 @@ func (c Client) Alert(code int, message string) error {
 		return err
 	}
 
-	log.Println("returned", string(ret), "to client", c.ID.String())
+	logger.Info("returned", string(ret), "to client", c.ID.String())
 	c.Conn.WriteMessage(websocket.BinaryMessage, ret)
 	return nil
 }
 
+// Error handles both full and minimal errors.
 func (c Client) Error(code int, message string) error {
 	var ret []byte
 	var err error
@@ -58,7 +60,7 @@ func (c Client) Error(code int, message string) error {
 		return err
 	}
 
-	log.Println("returned", string(ret), "to client", c.ID.String())
+	logger.Info("returned", string(ret), "to client", c.ID.String())
 	c.Conn.WriteMessage(websocket.BinaryMessage, ret)
 	return nil
 }

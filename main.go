@@ -1,10 +1,10 @@
 package main
 
 import (
-	"log"
 	"net/http"
 
 	"tiberious/handlers"
+	"tiberious/logger"
 	"tiberious/settings"
 	"tiberious/types"
 
@@ -22,7 +22,7 @@ func newConnection(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println(err)
+		logger.Error(err)
 		return
 	}
 
@@ -36,8 +36,8 @@ func init() {
 func main() {
 	http.HandleFunc("/", http.NotFound)
 	http.HandleFunc("/ws", newConnection)
-	log.Println("Starting Tiberious on", config.Port)
+	logger.Info("Starting Tiberious on", config.Port)
 	if err := http.ListenAndServe(config.Port, nil); err != nil {
-		log.Fatalln(err)
+		logger.Error(err)
 	}
 }
