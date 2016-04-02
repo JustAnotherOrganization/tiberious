@@ -16,14 +16,14 @@ import (
 func ParseMessage(client *types.Client, rawmsg []byte) int {
 	var message types.MasterObj
 	if err := json.Unmarshal(rawmsg, &message); err != nil {
-		if err := client.Error(400, "invalid object"); err != nil {
+		if err := client.Error(types.BadRequestOrObject, "invalid object"); err != nil {
 			logger.Error(err)
 		}
 		return 0
 	}
 
 	if message.Time <= 0 {
-		if err := client.Error(400, "missing or invalid time"); err != nil {
+		if err := client.Error(types.BadRequestOrObject, "missing or invalid time"); err != nil {
 			logger.Error(err)
 		}
 		return 0
@@ -43,7 +43,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		case strings.HasPrefix(message.To, "#"):
 			rexists, room := GetRoom(message.To)
 			if !rexists {
-				if err := client.Error(404, ""); err != nil {
+				if err := client.Error(types.NotFound, ""); err != nil {
 					logger.Error(err)
 				}
 				return 0
@@ -58,7 +58,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			}
 
 			if room.Private && !member {
-				if err := client.Error(403, ""); err != nil {
+				if err := client.Error(types.Forbidden, ""); err != nil {
 					log.Fatalln(err)
 				}
 				return 1
@@ -87,7 +87,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 				break
 			}
 
-			if err := client.Error(404, ""); err != nil {
+			if err := client.Error(types.NotFound, ""); err != nil {
 				logger.Error(err)
 			}
 
@@ -95,7 +95,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		}
 
 		// Send a response back saying the message was sent.
-		if err := client.Alert(200, ""); err != nil {
+		if err := client.Alert(types.OK, ""); err != nil {
 			logger.Error(err)
 		}
 
@@ -111,7 +111,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 
 		room.List[client.ID.String()] = client
 		// Send a response back confirming we joined the room..
-		if err := client.Alert(200, ""); err != nil {
+		if err := client.Alert(types.OK, ""); err != nil {
 			logger.Error(err)
 		}
 
@@ -122,7 +122,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		var room *types.Room
 		rexists, room = GetRoom(message.Room)
 		if !rexists {
-			if err := client.Error(404, ""); err != nil {
+			if err := client.Error(types.NotFound, ""); err != nil {
 				logger.Error(err)
 			}
 			break
@@ -138,7 +138,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 
 		if !ispresent {
 			// TODO should this return a different error number?
-			if err := client.Error(410, ""); err != nil {
+			if err := client.Error(types.Gone, ""); err != nil {
 				logger.Error(err)
 			}
 			break
@@ -147,13 +147,13 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		delete(room.List, client.ID.String())
 
 		// Send a response back confirming we left the room..
-		if err := client.Alert(200, ""); err != nil {
+		if err := client.Alert(types.OK, ""); err != nil {
 			logger.Error(err)
 		}
 
 		break
 	default:
-		if err := client.Error(400, ""); err != nil {
+		if err := client.Error(types.BadRequestOrObject, ""); err != nil {
 			logger.Error(err)
 		}
 		break

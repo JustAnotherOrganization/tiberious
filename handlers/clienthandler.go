@@ -21,14 +21,14 @@ func ClientHandler(conn *websocket.Conn) {
 	clients[client.ID.String()] = client
 	logger.Info("client", client.ID, "connected")
 
-	if err := client.Alert(200, ""); err != nil {
+	if err := client.Alert(types.OK, ""); err != nil {
 		logger.Error(err)
 	}
 
 	/* TODO we may want to remove this later it's just for easy testing.
 	 * to allow a client to get their UUID back from the server after
 	 * connecting. */
-	if err := client.Alert(100, string("Connected with ID "+client.ID.String())); err != nil {
+	if err := client.Alert(types.GeneralNotice, string("Connected with ID "+client.ID.String())); err != nil {
 		logger.Error(err)
 	}
 
