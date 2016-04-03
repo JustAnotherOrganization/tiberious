@@ -18,7 +18,8 @@ type Client struct {
 	Name string
 	/* Is a client authorized (logged in w/ a password), by default this is
 	 * false. */
-	Auth bool
+	Auth     bool
+	BanScore int
 }
 
 // NewClient returns a Client
