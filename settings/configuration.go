@@ -41,6 +41,7 @@ func setDefaults() {
 	config.MessageStore = false
 	config.MessageExpire = 0
 	config.MessageOverflow = 0
+	config.UserDatabase = 0
 }
 
 // GetConfig returns the current configuration file.

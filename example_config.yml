@@ -4,3 +4,4 @@ writebuffer: 1024
 messagestore: false
 messageexpire: 0
 messageoverflow: 0
+userdatabase: 0
