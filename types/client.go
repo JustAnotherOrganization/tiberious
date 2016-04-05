@@ -2,7 +2,6 @@ package types
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/pborman/uuid"
@@ -22,49 +21,14 @@ type Client struct {
 	BanScore int
 }
 
-const (
-	// GeneralNotice for general informational alerts
-	GeneralNotice = 100
-	// ImportantNotice for importand informational alerts
-	ImportantNotice = 101
-	// OK response, to confirm an action completed
-	OK = 200
-	// Created response code
-	Created = 201
-	// Accepted response code
-	Accepted = 202
-	// BadRequestOrObject response code
-	BadRequestOrObject = 400
-	// NotAuthorized response code
-	NotAuthorized = 401
-	// IncorrectCredentials response code
-	IncorrectCredentials = 402
-	// Forbidden response code
-	Forbidden = 403
-	// NotFound response code
-	NotFound = 404
-	// Conflict response code
-	Conflict = 409
-	// Gone response code
-	Gone = 410
-	// ServerError response code
-	ServerError = 500
-)
-
 // NewClient returns a Client
 func NewClient() (client *Client) {
 	return &Client{}
 }
 
-// Alert handles both full and minimal alerts.
+// Alert sends an alert with the current timestamp
 func (c Client) Alert(code int, message string) error {
-	var ret []byte
-	var err error
-	if message != "" {
-		ret, err = json.Marshal(AlertFull{Response: code, Time: time.Now().Unix(), Alert: message})
-	} else {
-		ret, err = json.Marshal(AlertMin{Response: code, Time: time.Now().Unix()})
-	}
+	ret, err := json.Marshal(NewAlert(code, message))
 
 	if err != nil {
 		return err
@@ -74,15 +38,9 @@ func (c Client) Alert(code int, message string) error {
 	return nil
 }
 
-// Error handles both full and minimal errors.
+// Error sends an error with the current timestamp
 func (c Client) Error(code int, message string) error {
-	var ret []byte
-	var err error
-	if message != "" {
-		ret, err = json.Marshal(ErrorFull{Response: code, Time: time.Now().Unix(), Error: message})
-	} else {
-		ret, err = json.Marshal(ErrorMin{Response: code, Time: time.Now().Unix()})
-	}
+	ret, err := json.Marshal(NewError(code, message))
 
 	if err != nil {
 		return err
