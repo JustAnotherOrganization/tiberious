@@ -2,7 +2,6 @@ package types
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/pborman/uuid"
@@ -27,15 +26,9 @@ func NewClient() (client *Client) {
 	return &Client{}
 }
 
-// Alert handles both full and minimal alerts.
+// Alert sends an alert with the current timestamp
 func (c Client) Alert(code int, message string) error {
-	var ret []byte
-	var err error
-	if message != "" {
-		ret, err = json.Marshal(AlertFull{Response: code, Time: time.Now().Unix(), Alert: message})
-	} else {
-		ret, err = json.Marshal(AlertMin{Response: code, Time: time.Now().Unix()})
-	}
+	ret, err := json.Marshal(NewAlert(code, message))
 
 	if err != nil {
 		return err
@@ -45,15 +38,9 @@ func (c Client) Alert(code int, message string) error {
 	return nil
 }
 
-// Error handles both full and minimal errors.
+// Error sends an error with the current timestamp
 func (c Client) Error(code int, message string) error {
-	var ret []byte
-	var err error
-	if message != "" {
-		ret, err = json.Marshal(ErrorFull{Response: code, Time: time.Now().Unix(), Error: message})
-	} else {
-		ret, err = json.Marshal(ErrorMin{Response: code, Time: time.Now().Unix()})
-	}
+	ret, err := json.Marshal(NewError(code, message))
 
 	if err != nil {
 		return err
