@@ -34,4 +34,8 @@ type Config struct {
 	/* RedisUser should be set to the database number to use in redis.
 	 * Unless using redis for something else 0 should suffice. */
 	RedisUser int64 `yaml:"redisuser"`
+	// ErrorLog allows setting a file location to log errors to.
+	ErrorLog string `yaml:"errorlog"`
+	// DebugLog allows setting a file location to log standard information.
+	DebugLog string `yaml:"debuglog"`
 }

@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"log"
 	"path/filepath"
+
 	"tiberious/types"
 
 	"gopkg.in/yaml.v2"
@@ -11,11 +12,14 @@ import (
 
 var config types.Config
 
+/* Since logger relies on settings for the file location of logs init errors
+ * here are passed directly to the standard logger. */
 func init() {
 	// If no config file is found set defaults.
 	configfile, err := filepath.Abs("./config.yml")
 	if err != nil {
 		log.Println(err)
+		log.Println("Using default settings")
 		setDefaults()
 		return
 	}
@@ -23,12 +27,14 @@ func init() {
 	configyaml, err := ioutil.ReadFile(configfile)
 	if err != nil {
 		log.Println(err)
+		log.Println("Using default settings")
 		setDefaults()
 		return
 	}
 	// If unable to parse the yaml set defaults.
 	if err := yaml.Unmarshal([]byte(configyaml), &config); err != nil {
 		log.Println(err)
+		log.Println("Using default settings")
 		setDefaults()
 	}
 }
@@ -42,6 +48,8 @@ func setDefaults() {
 	config.MessageExpire = 0
 	config.MessageOverflow = 0
 	config.UserDatabase = 0
+	config.ErrorLog = ""
+	config.DebugLog = ""
 }
 
 // GetConfig returns the current configuration file.

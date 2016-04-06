@@ -2,9 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
 	"strings"
 
+	"tiberious/logger"
 	"tiberious/types"
 
 	"github.com/gorilla/websocket"
@@ -22,23 +22,17 @@ func ClientHandler(conn *websocket.Conn) {
 	NewUser(client)
 
 	clients[client.ID.String()] = client
-	log.Println("client", client.ID, "connected")
+	logger.Info("client", client.ID, "connected")
 
 	if err := client.Alert(200, ""); err != nil {
-		/* Uncertain if this should be fatal or not, invalid
-		 * operation on the server side should definitely cause
-		 * some form of error presentation to the administrator
-		 * but I'm uncertain about full shutdown. */
-		log.Fatalln(err)
+		logger.Error(err)
 	}
 
 	/* TODO we may want to remove this later it's just for easy testing.
 	 * to allow a client to get their UUID back from the server after
 	 * connecting. */
 	if err := client.Alert(100, string("Connected with ID "+client.ID.String())); err != nil {
-		/* TODO like the above and other places we need better error handling
-		 * for this. */
-		log.Fatalln(err)
+		logger.Error(err)
 	}
 
 	// TODO handle authentication for servers with user databases.
@@ -47,7 +41,7 @@ func ClientHandler(conn *websocket.Conn) {
 	for {
 		_, p, err := client.Conn.ReadMessage()
 		if err != nil {
-			log.Println(err)
+			logger.Info(err)
 			// TODO disconnect the client.
 			return
 		}
@@ -55,16 +49,14 @@ func ClientHandler(conn *websocket.Conn) {
 		var message types.MasterObj
 		if err := json.Unmarshal(p, &message); err != nil {
 			if err := client.Error(400, "invalid object"); err != nil {
-				log.Fatalln(err)
+				logger.Error(err)
 			}
 			continue
 		}
 
 		if message.Time <= 0 {
 			if err := client.Error(400, "missing or invalid time"); err != nil {
-				/* TODO implement better internal error handling in case JSON
-				 * marshalling fails for some reason. */
-				log.Fatalln(err)
+				logger.Error(err)
 			}
 			continue
 		}
@@ -88,8 +80,7 @@ func ClientHandler(conn *websocket.Conn) {
 				rexists, room := GetRoom(message.To)
 				if !rexists {
 					if err := client.Error(404, ""); err != nil {
-						// TODO LOGGING
-						log.Fatalln(err)
+						logger.Error(err)
 					}
 					continue
 				}
@@ -117,8 +108,7 @@ func ClientHandler(conn *websocket.Conn) {
 				}
 
 				if err := client.Error(404, ""); err != nil {
-					// TODO afforementioned logging/error handling.
-					log.Fatalln(err)
+					logger.Error(err)
 				}
 
 				continue
@@ -126,8 +116,7 @@ func ClientHandler(conn *websocket.Conn) {
 
 			// Send a response back saying the message was sent.
 			if err := client.Alert(200, ""); err != nil {
-				// TODO this needs to be replaced with proper logging/handling.
-				log.Fatalln(err)
+				logger.Error(err)
 			}
 
 			break
@@ -143,8 +132,7 @@ func ClientHandler(conn *websocket.Conn) {
 			room[client.ID.String()] = client
 			// Send a response back confirming we joined the room..
 			if err := client.Alert(200, ""); err != nil {
-				// TODO this needs to be replaced with proper logging/handling.
-				log.Fatalln(err)
+				logger.Error(err)
 			}
 
 			break
@@ -155,7 +143,7 @@ func ClientHandler(conn *websocket.Conn) {
 			rexists, room = GetRoom(message.Room)
 			if !rexists {
 				if err := client.Error(404, ""); err != nil {
-					log.Fatalln(err)
+					logger.Error(err)
 				}
 				break
 			}
@@ -171,7 +159,7 @@ func ClientHandler(conn *websocket.Conn) {
 			if !ispresent {
 				// TODO should this return a different error number?
 				if err := client.Error(410, ""); err != nil {
-					log.Fatalln(err)
+					logger.Error(err)
 				}
 				break
 			}
@@ -180,18 +168,13 @@ func ClientHandler(conn *websocket.Conn) {
 
 			// Send a response back confirming we left the room..
 			if err := client.Alert(200, ""); err != nil {
-				// TODO this needs to be replaced with proper logging/handling.
-				log.Fatalln(err)
+				logger.Error(err)
 			}
 
 			break
 		default:
 			if err := client.Error(400, ""); err != nil {
-				/* Uncertain if this should be fatal or not, invalid
-				 * operation on the server side should definitely cause
-				 * some form of error presentation to the administrator
-				 * but I'm uncertain about full shutdown. */
-				log.Fatalln(err)
+				logger.Error(err)
 			}
 			break
 		}
