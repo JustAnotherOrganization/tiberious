@@ -1,4 +1,11 @@
 package types
 
-// Room map containing all the client objects in a given room.
-type Room map[string]*Client
+// RoomList maps contain all the clients for a given room.
+type RoomList map[string]*Client
+
+// Room struct contains the RoomList and RoomFlags for a given room.
+type Room struct {
+	Title   string
+	Private bool
+	List    RoomList
+}
