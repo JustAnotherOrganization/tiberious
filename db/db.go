@@ -15,15 +15,26 @@ func init() {
 func WriteUserData(user *types.User) error {
 	switch {
 	case config.UserDatabase == 1:
-		return rdis.HMSet(
-			"user-"+user.Type+user.ID.String(),
+		if err := rdis.HMSet(
+			"user-"+user.Type+"-"+user.ID.String(),
 			"id", user.ID.String(),
 			"type", user.Type,
 			"username", user.Username,
 			"loginname", user.LoginName,
 			"email", user.Email,
 			"password", user.Password,
-			"salt", user.Salt).Err()
+			"salt", user.Salt,
+			"connected", strbool(user.Connected),
+			"authorized", strbool(user.Authorized),
+		).Err(); err != nil {
+			return err
+		}
+
+		if err := rdis.SAdd("user-" + user.Type + user.ID.String() + "-rooms").Err(); err != nil {
+			return err
+		}
+
+		break
 	default:
 		break
 	}
@@ -45,7 +56,7 @@ func WriteRoomData(room *types.Room) error {
 		}
 
 		for _, c := range room.List {
-			if err := rdis.SAdd("room-"+room.Title+"-list", c.ID.String()).Err(); err != nil {
+			if err := rdis.SAdd("room-"+room.Title+"-list", c.User.ID.String()).Err(); err != nil {
 				return err
 			}
 		}
@@ -55,4 +66,25 @@ func WriteRoomData(room *types.Room) error {
 	}
 
 	return nil
+}
+
+// UserExists returns whether a user exists in the database.
+func UserExists(id string) (bool, error) {
+	switch {
+	case config.UserDatabase == 1:
+		res, err := rdis.Keys("user-" + id).Result()
+		if err != nil {
+			return false, err
+		}
+
+		if len(res) == 0 {
+			return false, nil
+		}
+
+		return true, nil
+	default:
+		break
+	}
+
+	return false, nil
 }

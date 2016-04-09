@@ -55,7 +55,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			// Block external messages on private rooms.
 			var member = false
 			for k := range room.List {
-				if client.ID.String() == k {
+				if client.User.ID.String() == k {
 					member = true
 				}
 			}
@@ -112,7 +112,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			room = GetNewRoom(message.Room)
 		}
 
-		room.List[client.ID.String()] = client
+		room.List[client.User.ID.String()] = client
 
 		// Update the room data for the database.
 		if config.UserDatabase != 0 {
@@ -141,7 +141,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 
 		var ispresent = false
 		for k := range room.List {
-			if k == client.ID.String() {
+			if k == client.User.ID.String() {
 				ispresent = true
 				break
 			}
@@ -155,7 +155,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			break
 		}
 
-		delete(room.List, client.ID.String())
+		delete(room.List, client.User.ID.String())
 
 		// Update the room data for the database.
 		if config.UserDatabase != 0 {

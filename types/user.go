@@ -11,13 +11,16 @@ import (
 
 //User ...
 type User struct {
-	ID        uuid.UUID
-	Type      string
-	Username  string
-	LoginName string
-	Email     string
-	Password  string
-	Salt      string
+	ID         uuid.UUID
+	Type       string
+	Username   string
+	LoginName  string
+	Email      string
+	Password   string
+	Salt       string
+	Connected  bool
+	Authorized bool
+	Rooms      []string
 }
 
 //HashPassword ..

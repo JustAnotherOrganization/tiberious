@@ -36,3 +36,12 @@ func init() {
 		log.Println("User database started on redis db", config.RedisUser)
 	}
 }
+
+// Stupid helper function because redis only handles strings.
+func strbool(b bool) string {
+	if b {
+		return "true"
+	}
+
+	return "false"
+}
