@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"tiberious/db"
 	"tiberious/logger"
 	"tiberious/types"
 
@@ -16,7 +17,7 @@ func ClientHandler(conn *websocket.Conn) {
 	client := types.NewClient()
 	client.Conn = conn
 	// Set the UUID and initialize a username of "guest"
-	NewUser(client)
+	db.NewUser(client)
 
 	clients[client.ID.String()] = client
 	logger.Info("client", client.ID, "connected")

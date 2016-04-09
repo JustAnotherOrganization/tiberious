@@ -1,7 +1,6 @@
-package handlers
+package db
 
 import (
-	"tiberious/redis"
 	"tiberious/settings"
 	"tiberious/types"
 
@@ -23,8 +22,8 @@ func NewUser(client *types.Client) error {
 	switch {
 	// userdatabase method 1, redis
 	case config.UserDatabase == 1:
-		rdis := redis.GetRedis()
-		if err := rdis.HMSet(client.ID.String(), "username", "guest", "registered", "false").Err(); err != nil {
+		redis := GetRedis()
+		if err := redis.HMSet(client.ID.String(), "username", "guest", "registered", "false").Err(); err != nil {
 			return err
 		}
 		break
