@@ -5,12 +5,10 @@ import (
 	"log"
 	"path/filepath"
 
-	"tiberious/types"
-
 	"gopkg.in/yaml.v2"
 )
 
-var config types.Config
+var config Config
 
 /* Since logger relies on settings for the file location of logs init errors
  * here are passed directly to the standard logger. */
@@ -36,7 +34,10 @@ func init() {
 		log.Println(err)
 		log.Println("Using default settings")
 		setDefaults()
+		return
 	}
+
+	log.Println("Settings loaded from config.yml")
 }
 
 func setDefaults() {
@@ -53,6 +54,6 @@ func setDefaults() {
 }
 
 // GetConfig returns the current configuration file.
-func GetConfig() types.Config {
+func GetConfig() Config {
 	return config
 }

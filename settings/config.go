@@ -1,4 +1,4 @@
-package types
+package settings
 
 // Config will hold all the standard configuration data for Tiberious
 type Config struct {

@@ -6,11 +6,10 @@ import (
 	"os"
 
 	"tiberious/settings"
-	"tiberious/types"
 )
 
 var (
-	config types.Config
+	config settings.Config
 	// Use separate loggers so that errors can be more easily tracked
 	errors *log.Logger
 	info   *log.Logger

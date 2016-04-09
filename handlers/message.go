@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"tiberious/logger"
+	"tiberious/settings"
 	"tiberious/types"
 
 	"github.com/gorilla/websocket"
@@ -14,6 +15,8 @@ import (
 /*ParseMessage parses a message object and returns an int back, with a ban-score
  *if this is greater than 0 it is applied to the clients ban-score. */
 func ParseMessage(client *types.Client, rawmsg []byte) int {
+	config := settings.GetConfig()
+
 	var message types.MasterObj
 	if err := json.Unmarshal(rawmsg, &message); err != nil {
 		if err := client.Error(types.BadRequestOrObject, "invalid object"); err != nil {
@@ -52,7 +55,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			// Block external messages on private rooms.
 			var member = false
 			for k := range room.List {
-				if client.ID.String() == k {
+				if client.User.ID.String() == k {
 					member = true
 				}
 			}
@@ -109,7 +112,15 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			room = GetNewRoom(message.Room)
 		}
 
-		room.List[client.ID.String()] = client
+		room.List[client.User.ID.String()] = client
+
+		// Update the room data for the database.
+		if config.UserDatabase != 0 {
+			if err := WriteRoomData(room); err != nil {
+				logger.Error(err)
+			}
+		}
+
 		// Send a response back confirming we joined the room..
 		if err := client.Alert(types.OK, ""); err != nil {
 			logger.Error(err)
@@ -130,7 +141,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 
 		var ispresent = false
 		for k := range room.List {
-			if k == client.ID.String() {
+			if k == client.User.ID.String() {
 				ispresent = true
 				break
 			}
@@ -144,7 +155,14 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			break
 		}
 
-		delete(room.List, client.ID.String())
+		delete(room.List, client.User.ID.String())
+
+		// Update the room data for the database.
+		if config.UserDatabase != 0 {
+			if err := WriteRoomData(room); err != nil {
+				logger.Error(err)
+			}
+		}
 
 		// Send a response back confirming we left the room..
 		if err := client.Alert(types.OK, ""); err != nil {

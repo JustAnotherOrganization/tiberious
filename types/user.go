@@ -4,16 +4,23 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 
+	"github.com/pborman/uuid"
+
 	"golang.org/x/crypto/pbkdf2"
 )
 
 //User ...
 type User struct {
-	Username  string
-	LoginName string
-	Email     string
-	Password  string
-	Salt      string
+	ID         uuid.UUID
+	Type       string
+	Username   string
+	LoginName  string
+	Email      string
+	Password   string
+	Salt       string
+	Connected  bool
+	Authorized bool
+	Rooms      []string
 }
 
 //HashPassword ..

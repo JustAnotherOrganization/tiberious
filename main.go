@@ -6,12 +6,11 @@ import (
 	"tiberious/handlers"
 	"tiberious/logger"
 	"tiberious/settings"
-	"tiberious/types"
 
 	"github.com/gorilla/websocket"
 )
 
-var config types.Config
+var config settings.Config
 
 // TODO move this into a separate handler of some form.
 func newConnection(w http.ResponseWriter, r *http.Request) {
