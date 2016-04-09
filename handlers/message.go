@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"tiberious/logger"
+	"tiberious/settings"
 	"tiberious/types"
 
 	"github.com/gorilla/websocket"
@@ -14,6 +15,8 @@ import (
 /*ParseMessage parses a message object and returns an int back, with a ban-score
  *if this is greater than 0 it is applied to the clients ban-score. */
 func ParseMessage(client *types.Client, rawmsg []byte) int {
+	config := settings.GetConfig()
+
 	var message types.MasterObj
 	if err := json.Unmarshal(rawmsg, &message); err != nil {
 		if err := client.Error(types.BadRequestOrObject, "invalid object"); err != nil {
@@ -110,6 +113,14 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		}
 
 		room.List[client.ID.String()] = client
+
+		// Update the room data for the database.
+		if config.UserDatabase != 0 {
+			if err := WriteRoomData(room); err != nil {
+				logger.Error(err)
+			}
+		}
+
 		// Send a response back confirming we joined the room..
 		if err := client.Alert(types.OK, ""); err != nil {
 			logger.Error(err)
@@ -145,6 +156,13 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		}
 
 		delete(room.List, client.ID.String())
+
+		// Update the room data for the database.
+		if config.UserDatabase != 0 {
+			if err := WriteRoomData(room); err != nil {
+				logger.Error(err)
+			}
+		}
 
 		// Send a response back confirming we left the room..
 		if err := client.Alert(types.OK, ""); err != nil {

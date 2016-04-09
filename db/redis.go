@@ -9,9 +9,7 @@ import (
 	"gopkg.in/redis.v3"
 )
 
-var (
-	rdis *redis.Client
-)
+var rdis *redis.Client
 
 func init() {
 	if config.UserDatabase == 1 {
@@ -37,9 +35,4 @@ func init() {
 
 		log.Println("User database started on redis db", config.RedisUser)
 	}
-}
-
-// GetRedis returns the current redis object.
-func GetRedis() *redis.Client {
-	return rdis
 }

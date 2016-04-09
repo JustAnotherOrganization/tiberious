@@ -3,8 +3,6 @@ package db
 import (
 	"tiberious/settings"
 	"tiberious/types"
-
-	"github.com/pborman/uuid"
 )
 
 var config settings.Config
@@ -13,18 +11,43 @@ func init() {
 	config = settings.GetConfig()
 }
 
-/*NewUser generates a new UUID for a newly connected user and if using a
- * database initializes a hset with the UUID as the key and a username of
- * "guest". */
-func NewUser(client *types.Client) error {
-	id := uuid.NewRandom()
-	client.ID = id
+// WriteUserData writes a given user object to the current database.
+func WriteUserData(user *types.User) error {
 	switch {
-	// userdatabase method 1, redis
 	case config.UserDatabase == 1:
-		redis := GetRedis()
-		if err := redis.HMSet(client.ID.String(), "username", "guest", "registered", "false").Err(); err != nil {
+		return rdis.HMSet(
+			"user-"+user.Type+user.ID.String(),
+			"id", user.ID.String(),
+			"type", user.Type,
+			"username", user.Username,
+			"loginname", user.LoginName,
+			"email", user.Email,
+			"password", user.Password,
+			"salt", user.Salt).Err()
+	default:
+		break
+	}
+
+	return nil
+}
+
+// WriteRoomData writes a given room object to the current database.
+func WriteRoomData(room *types.Room) error {
+	switch {
+	case config.UserDatabase == 1:
+		var private = "false"
+		if room.Private {
+			private = "true"
+		}
+
+		if err := rdis.HMSet("room-"+room.Title+"-info", "private", private).Err(); err != nil {
 			return err
+		}
+
+		for _, c := range room.List {
+			if err := rdis.SAdd("room-"+room.Title+"-list", c.ID.String()).Err(); err != nil {
+				return err
+			}
 		}
 		break
 	default:

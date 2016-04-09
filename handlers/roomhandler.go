@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"tiberious/db"
 	"tiberious/types"
 )
 
@@ -31,4 +32,9 @@ func GetNewRoom(rname string) *types.Room {
 	room.Private = false
 	rooms[rname] = room
 	return room
+}
+
+// WriteRoomData writes the given room object to the current database.
+func WriteRoomData(room *types.Room) error {
+	return db.WriteRoomData(room)
 }

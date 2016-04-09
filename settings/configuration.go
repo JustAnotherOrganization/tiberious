@@ -34,7 +34,10 @@ func init() {
 		log.Println(err)
 		log.Println("Using default settings")
 		setDefaults()
+		return
 	}
+
+	log.Println("Settings loaded from config.yml")
 }
 
 func setDefaults() {
