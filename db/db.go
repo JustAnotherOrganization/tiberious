@@ -72,7 +72,7 @@ func WriteRoomData(room *types.Room) error {
 func UserExists(id string) (bool, error) {
 	switch {
 	case config.UserDatabase == 1:
-		res, err := rdis.Keys("user-" + id).Result()
+		res, err := rdis.Keys("user-*-" + id).Result()
 		if err != nil {
 			return false, err
 		}
