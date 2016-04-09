@@ -8,7 +8,7 @@ import (
 	"github.com/pborman/uuid"
 )
 
-var config types.Config
+var config settings.Config
 
 func init() {
 	config = settings.GetConfig()

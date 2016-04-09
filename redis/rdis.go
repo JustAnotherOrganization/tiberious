@@ -7,13 +7,12 @@ import (
 	"log"
 
 	"tiberious/settings"
-	"tiberious/types"
 
 	"gopkg.in/redis.v3"
 )
 
 var (
-	config types.Config
+	config settings.Config
 	rdis   *redis.Client
 )
 
