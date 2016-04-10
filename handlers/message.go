@@ -59,6 +59,22 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 				return 0
 			}
 
+			// Block messages from outside a group.
+			var member = false
+			for _, u := range group.Users {
+				if client.User.ID.String() == u.ID.String() {
+					member = true
+				}
+
+			}
+
+			if !member {
+				if err := client.Error(types.Forbidden, ""); err != nil {
+					logger.Error(err)
+				}
+				return 1
+			}
+
 			room := GetRoom(slice[0], slice[1])
 			if room == nil {
 				if err := client.Error(types.NotFound, ""); err != nil {
@@ -68,7 +84,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			}
 
 			// Block external messages on private rooms.
-			var member = false
+			member = false
 			for k := range room.Users {
 				if client.User.ID.String() == k {
 					member = true
@@ -134,6 +150,22 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 				logger.Error(err)
 			}
 			return 0
+		}
+
+		// Block messages from outside a group.
+		var member = false
+		for _, u := range group.Users {
+			if client.User.ID.String() == u.ID.String() {
+				member = true
+			}
+
+		}
+
+		if !member {
+			if err := client.Error(types.Forbidden, ""); err != nil {
+				logger.Error(err)
+			}
+			return 1
 		}
 
 		// TODO implement private rooms

@@ -44,6 +44,10 @@ func ClientHandler(conn *websocket.Conn) {
 
 	client.User.Type = "default"
 
+	defgroup := GetGroup("#default")
+	defgroup.Users[client.User.ID.String()] = client.User
+	client.User.Groups = append(client.User.Groups, "#default")
+
 	clients[client.User.ID.String()] = client
 	logger.Info("client", client.User.ID, "connected")
 
@@ -62,6 +66,7 @@ func ClientHandler(conn *websocket.Conn) {
 
 	if settings.GetConfig().UserDatabase != 0 {
 		db.WriteUserData(client.User)
+		db.WriteGroupData(defgroup)
 	}
 
 	/* Never return from this loop!

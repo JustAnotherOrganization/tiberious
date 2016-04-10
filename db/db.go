@@ -30,10 +30,17 @@ func WriteUserData(user *types.User) error {
 			return err
 		}
 
-		if err := rdis.SAdd("user-" + user.Type + user.ID.String() + "-rooms").Err(); err != nil {
-			return err
+		for _, r := range user.Rooms {
+			if err := rdis.SAdd("user-"+user.Type+"-"+user.ID.String()+"-rooms", r).Err(); err != nil {
+				return err
+			}
 		}
 
+		for _, g := range user.Groups {
+			if err := rdis.SAdd("user-"+user.Type+"-"+user.ID.String()+"-groups", g).Err(); err != nil {
+				return err
+			}
+		}
 		break
 	default:
 		break
@@ -111,13 +118,3 @@ func UserExists(id string) (bool, error) {
 
 	return false, nil
 }
-
-/*
-// UserIsMember returns if a user is a  meber of a given room.
-func UserIsMemberRoom(id, title string) (bool, error) {
-	switch {
-	case config.UserDatabase == 1:
-		ret, err := rdis.
-	}
-}
-*/

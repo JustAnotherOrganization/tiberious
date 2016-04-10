@@ -21,6 +21,7 @@ type User struct {
 	Connected  bool
 	Authorized bool
 	Rooms      []string
+	Groups     []string
 }
 
 //HashPassword ..
