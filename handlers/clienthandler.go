@@ -82,3 +82,30 @@ func ClientHandler(conn *websocket.Conn) {
 	// We broke out of the loop so disconnect the client.
 	client.Conn.Close()
 }
+
+// GetClientForUser returns a client object that houses a given user
+func GetClientForUser(user *types.User) *types.Client {
+	for _, c := range clients {
+		if c.User.ID.String() == user.ID.String() {
+			return c
+		}
+	}
+
+	return nil
+}
+
+/*GetClientsForUsers returns a slice of clients that contain the users in a
+ * given slice. */
+func GetClientsForUsers(users []*types.User) []*types.Client {
+	var ret []*types.Client
+	for _, u := range users {
+		for _, c := range clients {
+			if c.User.ID.String() == u.ID.String() {
+				ret = append(ret, c)
+				break
+			}
+		}
+	}
+
+	return ret
+}
