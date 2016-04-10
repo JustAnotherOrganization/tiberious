@@ -51,12 +51,35 @@ func WriteRoomData(room *types.Room) error {
 			private = "true"
 		}
 
-		if err := rdis.HMSet("room-"+room.Title+"-info", "private", private).Err(); err != nil {
+		if err := rdis.HMSet("room-"+room.Group+"-"+room.Title+"-info", "private", private).Err(); err != nil {
 			return err
 		}
 
-		for _, c := range room.List {
-			if err := rdis.SAdd("room-"+room.Title+"-list", c.User.ID.String()).Err(); err != nil {
+		for _, u := range room.Users {
+			if err := rdis.SAdd("room-"+room.Group+"-"+room.Title+"-list", u.ID.String()).Err(); err != nil {
+				return err
+			}
+		}
+		break
+	default:
+		break
+	}
+
+	return nil
+}
+
+// WriteGroupData writes a given group object to the current database.
+func WriteGroupData(group *types.Group) error {
+	switch {
+	case config.UserDatabase == 1:
+		for _, r := range group.Rooms {
+			if err := rdis.SAdd("group-"+group.Title+"-rooms", r.Title).Err(); err != nil {
+				return err
+			}
+		}
+
+		for _, u := range group.Users {
+			if err := rdis.SAdd("group-"+group.Title+"-users", u.ID.String()).Err(); err != nil {
 				return err
 			}
 		}
@@ -88,3 +111,13 @@ func UserExists(id string) (bool, error) {
 
 	return false, nil
 }
+
+/*
+// UserIsMember returns if a user is a  meber of a given room.
+func UserIsMemberRoom(id, title string) (bool, error) {
+	switch {
+	case config.UserDatabase == 1:
+		ret, err := rdis.
+	}
+}
+*/
