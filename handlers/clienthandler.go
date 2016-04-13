@@ -44,6 +44,10 @@ func ClientHandler(conn *websocket.Conn) {
 
 	client.User.Type = "default"
 
+	defgroup := GetGroup("#default")
+	defgroup.Users[client.User.ID.String()] = client.User
+	client.User.Groups = append(client.User.Groups, "#default")
+
 	clients[client.User.ID.String()] = client
 	logger.Info("client", client.User.ID, "connected")
 
@@ -62,6 +66,7 @@ func ClientHandler(conn *websocket.Conn) {
 
 	if settings.GetConfig().UserDatabase != 0 {
 		db.WriteUserData(client.User)
+		db.WriteGroupData(defgroup)
 	}
 
 	/* Never return from this loop!
@@ -81,4 +86,31 @@ func ClientHandler(conn *websocket.Conn) {
 
 	// We broke out of the loop so disconnect the client.
 	client.Conn.Close()
+}
+
+// GetClientForUser returns a client object that houses a given user
+func GetClientForUser(user *types.User) *types.Client {
+	for _, c := range clients {
+		if c.User.ID.String() == user.ID.String() {
+			return c
+		}
+	}
+
+	return nil
+}
+
+/*GetClientsForUsers returns a slice of clients that contain the users in a
+ * given slice. */
+func GetClientsForUsers(users []*types.User) []*types.Client {
+	var ret []*types.Client
+	for _, u := range users {
+		for _, c := range clients {
+			if c.User.ID.String() == u.ID.String() {
+				ret = append(ret, c)
+				break
+			}
+		}
+	}
+
+	return ret
 }

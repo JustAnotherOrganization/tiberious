@@ -44,8 +44,39 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		switch {
 		// All room's start with "#"
 		case strings.HasPrefix(message.To, "#"):
-			rexists, room := GetRoom(message.To)
-			if !rexists {
+			if !strings.Contains(message.To, "/") {
+				if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
+					logger.Error(err)
+				}
+				return 0
+			}
+			slice := strings.Split(message.To, "/")
+			group := GetGroup(slice[0])
+			if group == nil {
+				if err := client.Error(types.NotFound, "group does not exist"); err != nil {
+					logger.Error(err)
+				}
+				return 0
+			}
+
+			// Block messages from outside a group.
+			var member = false
+			for _, u := range group.Users {
+				if client.User.ID.String() == u.ID.String() {
+					member = true
+				}
+
+			}
+
+			if !member {
+				if err := client.Error(types.Forbidden, ""); err != nil {
+					logger.Error(err)
+				}
+				return 1
+			}
+
+			room := GetRoom(slice[0], slice[1])
+			if room == nil {
 				if err := client.Error(types.NotFound, ""); err != nil {
 					logger.Error(err)
 				}
@@ -53,8 +84,8 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			}
 
 			// Block external messages on private rooms.
-			var member = false
-			for k := range room.List {
+			member = false
+			for k := range room.Users {
 				if client.User.ID.String() == k {
 					member = true
 				}
@@ -68,7 +99,8 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			}
 
 			// TODO should this be handled in a channel or goroutine?
-			for _, c := range room.List {
+			for _, u := range room.Users {
+				c := GetClientForUser(u)
 				c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
 			}
 		default:
@@ -103,16 +135,47 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		}
 
 		break
+	// Join messages should include both a group and a room name.
 	case message.Action == "join":
-		// TODO implement private rooms
-		var rexists = false
-		var room *types.Room
-		rexists, room = GetRoom(message.Room)
-		if !rexists {
-			room = GetNewRoom(message.Room)
+		if !strings.Contains(message.Room, "/") {
+			if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
+				logger.Error(err)
+			}
+			return 0
+		}
+		slice := strings.Split(message.Room, "/")
+		group := GetGroup(slice[0])
+		if group == nil {
+			if err := client.Error(types.NotFound, "group does not exist"); err != nil {
+				logger.Error(err)
+			}
+			return 0
 		}
 
-		room.List[client.User.ID.String()] = client
+		// Block messages from outside a group.
+		var member = false
+		for _, u := range group.Users {
+			if client.User.ID.String() == u.ID.String() {
+				member = true
+			}
+
+		}
+
+		if !member {
+			if err := client.Error(types.Forbidden, ""); err != nil {
+				logger.Error(err)
+			}
+			return 1
+		}
+
+		// TODO implement private rooms
+		var room *types.Room
+		room = GetRoom(slice[0], slice[1])
+		if room == nil {
+			room = GetNewRoom(slice[0], slice[1])
+		}
+
+		room.Users[client.User.ID.String()] = client.User
 
 		// Update the room data for the database.
 		if config.UserDatabase != 0 {
@@ -129,10 +192,24 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		break
 	case message.Action == "leave":
 	case message.Action == "part":
-		var rexists = false
+		if !strings.Contains(message.Room, "/") {
+			if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
+				logger.Error(err)
+			}
+			return 0
+		}
+		slice := strings.Split(message.Room, "/")
+		group := GetGroup(slice[0])
+		if group == nil {
+			if err := client.Error(types.NotFound, "group does not exist"); err != nil {
+				logger.Error(err)
+			}
+			return 0
+		}
+
 		var room *types.Room
-		rexists, room = GetRoom(message.Room)
-		if !rexists {
+		room = GetRoom(slice[0], slice[1])
+		if room == nil {
 			if err := client.Error(types.NotFound, ""); err != nil {
 				logger.Error(err)
 			}
@@ -140,7 +217,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		}
 
 		var ispresent = false
-		for k := range room.List {
+		for k := range room.Users {
 			if k == client.User.ID.String() {
 				ispresent = true
 				break
@@ -155,7 +232,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			break
 		}
 
-		delete(room.List, client.User.ID.String())
+		delete(room.Users, client.User.ID.String())
 
 		// Update the room data for the database.
 		if config.UserDatabase != 0 {

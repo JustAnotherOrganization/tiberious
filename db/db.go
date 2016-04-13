@@ -30,10 +30,17 @@ func WriteUserData(user *types.User) error {
 			return err
 		}
 
-		if err := rdis.SAdd("user-" + user.Type + user.ID.String() + "-rooms").Err(); err != nil {
-			return err
+		for _, r := range user.Rooms {
+			if err := rdis.SAdd("user-"+user.Type+"-"+user.ID.String()+"-rooms", r).Err(); err != nil {
+				return err
+			}
 		}
 
+		for _, g := range user.Groups {
+			if err := rdis.SAdd("user-"+user.Type+"-"+user.ID.String()+"-groups", g).Err(); err != nil {
+				return err
+			}
+		}
 		break
 	default:
 		break
@@ -51,12 +58,35 @@ func WriteRoomData(room *types.Room) error {
 			private = "true"
 		}
 
-		if err := rdis.HMSet("room-"+room.Title+"-info", "private", private).Err(); err != nil {
+		if err := rdis.HMSet("room-"+room.Group+"-"+room.Title+"-info", "private", private).Err(); err != nil {
 			return err
 		}
 
-		for _, c := range room.List {
-			if err := rdis.SAdd("room-"+room.Title+"-list", c.User.ID.String()).Err(); err != nil {
+		for _, u := range room.Users {
+			if err := rdis.SAdd("room-"+room.Group+"-"+room.Title+"-list", u.ID.String()).Err(); err != nil {
+				return err
+			}
+		}
+		break
+	default:
+		break
+	}
+
+	return nil
+}
+
+// WriteGroupData writes a given group object to the current database.
+func WriteGroupData(group *types.Group) error {
+	switch {
+	case config.UserDatabase == 1:
+		for _, r := range group.Rooms {
+			if err := rdis.SAdd("group-"+group.Title+"-rooms", r.Title).Err(); err != nil {
+				return err
+			}
+		}
+
+		for _, u := range group.Users {
+			if err := rdis.SAdd("group-"+group.Title+"-users", u.ID.String()).Err(); err != nil {
 				return err
 			}
 		}
