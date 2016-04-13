@@ -13,7 +13,6 @@ var (
 
 func init() {
 	config = settings.GetConfig()
-
 	defgroup := GetNewGroup("#default", true)
 	genroom := GetNewRoom("#default", "#general")
 	if config.UserDatabase != 0 {
@@ -25,7 +24,7 @@ func init() {
 // GetGroup check if a group exists and if so return it
 func GetGroup(gname string) *types.Group {
 	// Only the default group exists with UserDatabase disabled.
-	if config.UserDatabase == 0 && gname != "default" {
+	if config.UserDatabase == 0 && gname != "#default" {
 		return nil
 	}
 
@@ -49,7 +48,7 @@ func GetGroup(gname string) *types.Group {
 /*GetNewGroup should ony be used if the group doesn't already exist
  * and should not be called if the UserDatabase is disabled. */
 func GetNewGroup(gname string, init bool) *types.Group {
-	if config.UserDatabase == 0 {
+	if config.UserDatabase == 0 && !init {
 		return nil
 	}
 
