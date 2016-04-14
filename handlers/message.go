@@ -12,6 +12,20 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+func relayToRoom(room *types.Room, rawmsg []byte) {
+	for _, u := range room.Users {
+		c := GetClientForUser(u)
+		c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
+	}
+}
+
+func relayToGroup(group *types.Group, rawmsg []byte) {
+	for _, u := range group.Users {
+		c := GetClientForUser(u)
+		c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
+	}
+}
+
 /*ParseMessage parses a message object and returns an int back, with a ban-score
  *if this is greater than 0 it is applied to the clients ban-score. */
 func ParseMessage(client *types.Client, rawmsg []byte) int {
@@ -98,11 +112,8 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 				return 1
 			}
 
-			// TODO should this be handled in a channel or goroutine?
-			for _, u := range room.Users {
-				c := GetClientForUser(u)
-				c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
-			}
+			go relayToRoom(room, rawmsg)
+			break
 		default:
 			// Handle 1to1 messaging.
 
