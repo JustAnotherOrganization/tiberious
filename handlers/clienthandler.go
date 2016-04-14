@@ -47,8 +47,11 @@ func ClientHandler(conn *websocket.Conn) {
 	defgroup := GetGroup("#default")
 	defgroup.Users[client.User.ID.String()] = client.User
 	client.User.Groups = append(client.User.Groups, "#default")
+	room := GetRoom("#default", "#general")
 
+	room.Users[client.User.ID.String()] = client.User
 	clients[client.User.ID.String()] = client
+
 	logger.Info("client", client.User.ID, "connected")
 
 	if err := client.Alert(types.OK, ""); err != nil {
@@ -67,6 +70,7 @@ func ClientHandler(conn *websocket.Conn) {
 	if settings.GetConfig().UserDatabase != 0 {
 		db.WriteUserData(client.User)
 		db.WriteGroupData(defgroup)
+		db.WriteRoomData(room)
 	}
 
 	/* Never return from this loop!
