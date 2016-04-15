@@ -3,6 +3,7 @@ package types
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 
 	"github.com/pborman/uuid"
 
@@ -26,7 +27,7 @@ type User struct {
 
 //HashPassword ..
 func HashPassword(password, salt string) string {
-	return string(pbkdf2.Key([]byte(password), []byte(salt), 4096, 32, sha256.New))
+	return string(base64.StdEncoding.EncodeToString(pbkdf2.Key([]byte(password), []byte(salt), 4096, 32, sha256.New))) 
 }
 
 func (user *User) isPassword(passwordTest string) bool {
