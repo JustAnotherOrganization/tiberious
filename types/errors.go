@@ -1,6 +1,9 @@
 package types
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 const (
 	// BadRequestOrObject response code
@@ -19,6 +22,11 @@ const (
 	Gone = 410
 	// ServerError response code
 	ServerError = 500
+)
+
+// Generic internal Go errors
+var (
+	NotInDB = errors.New("not found in db")
 )
 
 // Error JIM standard error response, error message may be optional.

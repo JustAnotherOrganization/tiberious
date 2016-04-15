@@ -3,7 +3,6 @@ package handlers
 import (
 	"tiberious/db"
 	"tiberious/logger"
-	"tiberious/settings"
 	"tiberious/types"
 
 	"github.com/gorilla/websocket"
@@ -45,10 +44,11 @@ func ClientHandler(conn *websocket.Conn) {
 	client.User.Type = "default"
 
 	defgroup := GetGroup("#default")
+	defgroup.Users = make(map[string]*types.User)
 	defgroup.Users[client.User.ID.String()] = client.User
 	client.User.Groups = append(client.User.Groups, "#default")
 	room := GetRoom("#default", "#general")
-
+	client.User.Connected = true
 	room.Users[client.User.ID.String()] = client.User
 	clients[client.User.ID.String()] = client
 
@@ -66,12 +66,9 @@ func ClientHandler(conn *websocket.Conn) {
 	}
 
 	// TODO handle authentication for servers with user databases.
-
-	if settings.GetConfig().UserDatabase != 0 {
-		db.WriteUserData(client.User)
-		db.WriteGroupData(defgroup)
-		db.WriteRoomData(room)
-	}
+	db.WriteUserData(client.User)
+	db.WriteGroupData(defgroup)
+	db.WriteRoomData(room)
 
 	/* Never return from this loop!
 	 * Never break from this loop unless intending to disconnect the client. */

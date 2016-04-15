@@ -1,8 +1,5 @@
 package db
 
-/* TODO make the presence of this optional and not loaded if redis is not
- * enabled for the application. If possible... */
-
 import (
 	"log"
 
@@ -12,7 +9,7 @@ import (
 var rdis *redis.Client
 
 func init() {
-	if config.UserDatabase == 1 {
+	if config.UserDatabase == 0 {
 		if config.RedisHost == "" {
 			log.Fatalln("Missing redishost in config file")
 		}
@@ -44,4 +41,12 @@ func strbool(b bool) string {
 	}
 
 	return "false"
+}
+
+func boolstr(s string) bool {
+	if s == "true" {
+		return true
+	}
+
+	return false
 }

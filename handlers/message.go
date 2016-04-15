@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"tiberious/logger"
-	"tiberious/settings"
 	"tiberious/types"
 
 	"github.com/gorilla/websocket"
@@ -29,8 +28,6 @@ func relayToGroup(group *types.Group, rawmsg []byte) {
 /*ParseMessage parses a message object and returns an int back, with a ban-score
  *if this is greater than 0 it is applied to the clients ban-score. */
 func ParseMessage(client *types.Client, rawmsg []byte) int {
-	config := settings.GetConfig()
-
 	var message types.MasterObj
 	if err := json.Unmarshal(rawmsg, &message); err != nil {
 		if err := client.Error(types.BadRequestOrObject, "invalid object"); err != nil {
@@ -57,7 +54,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 
 		switch {
 		// All room's start with "#"
-		case strings.HasPrefix(message.To, "#"):
+		case IsRoomName(message.To):
 			if !strings.Contains(message.To, "/") {
 				if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
 					logger.Error(err)
@@ -75,11 +72,10 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 
 			// Block messages from outside a group.
 			var member = false
-			for _, u := range group.Users {
-				if client.User.ID.String() == u.ID.String() {
+			for _, g := range client.User.Groups {
+				if group.Title == g {
 					member = true
 				}
-
 			}
 
 			if !member {
@@ -111,7 +107,6 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 				}
 				return 1
 			}
-
 			go relayToRoom(room, rawmsg)
 			break
 		default:
@@ -148,6 +143,13 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		break
 	// Join messages should include both a group and a room name.
 	case message.Action == "join":
+		if !IsRoomName(message.Room) {
+			if err := client.Error(types.BadRequestOrObject, "room names should start with '#'"); err != nil {
+				logger.Error(err)
+			}
+			return 0
+		}
+
 		if !strings.Contains(message.Room, "/") {
 			if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
 				logger.Error(err)
@@ -163,13 +165,12 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			return 0
 		}
 
-		// Block messages from outside a group.
+		// Block users from joining if they're outside the group.
 		var member = false
-		for _, u := range group.Users {
-			if client.User.ID.String() == u.ID.String() {
+		for _, g := range client.User.Groups {
+			if group.Title == g {
 				member = true
 			}
-
 		}
 
 		if !member {
@@ -186,13 +187,12 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			room = GetNewRoom(slice[0], slice[1])
 		}
 
+		room.Users = make(map[string]*types.User)
 		room.Users[client.User.ID.String()] = client.User
 
 		// Update the room data for the database.
-		if config.UserDatabase != 0 {
-			if err := WriteRoomData(room); err != nil {
-				logger.Error(err)
-			}
+		if err := WriteRoomData(room); err != nil {
+			logger.Error(err)
 		}
 
 		// Send a response back confirming we joined the room..
@@ -203,6 +203,13 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		break
 	case message.Action == "leave":
 	case message.Action == "part":
+		if !IsRoomName(message.Room) {
+			if err := client.Error(types.BadRequestOrObject, "room names should start with '#'"); err != nil {
+				logger.Error(err)
+			}
+			return 0
+		}
+
 		if !strings.Contains(message.Room, "/") {
 			if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
 				logger.Error(err)
@@ -246,10 +253,8 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		delete(room.Users, client.User.ID.String())
 
 		// Update the room data for the database.
-		if config.UserDatabase != 0 {
-			if err := WriteRoomData(room); err != nil {
-				logger.Error(err)
-			}
+		if err := WriteRoomData(room); err != nil {
+			logger.Error(err)
 		}
 
 		// Send a response back confirming we left the room..
