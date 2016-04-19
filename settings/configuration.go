@@ -13,12 +13,14 @@ var config Config
 /* Since logger relies on settings for the file location of logs init errors
  * here are passed directly to the standard logger. */
 func init() {
+	/* Set default values then overwrite them with ones in the yml, this way
+	 * if something is missing from the yml the defaults apply properly. */
+	setDefaults()
 	// If no config file is found set defaults.
 	configfile, err := filepath.Abs("./config.yml")
 	if err != nil {
 		log.Println(err)
 		log.Println("Using default settings")
-		setDefaults()
 		return
 	}
 	// If unable to read the file set defaults.
@@ -26,14 +28,12 @@ func init() {
 	if err != nil {
 		log.Println(err)
 		log.Println("Using default settings")
-		setDefaults()
 		return
 	}
 	// If unable to parse the yaml set defaults.
 	if err := yaml.Unmarshal([]byte(configyaml), &config); err != nil {
 		log.Println(err)
 		log.Println("Using default settings")
-		setDefaults()
 		return
 	}
 
@@ -51,6 +51,10 @@ func setDefaults() {
 	config.UserDatabase = 0
 	config.ErrorLog = ""
 	config.DebugLog = ""
+	config.AllowGuests = true
+	config.RedisHost = "localhost:6379"
+	config.RedisPass = ""
+	config.RedisUser = 0
 }
 
 // GetConfig returns the current configuration file.

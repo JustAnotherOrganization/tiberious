@@ -43,14 +43,22 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		return 0
 	}
 
+	if !config.AllowGuests && !client.Authorized {
+		if message.Action != "authenticate" {
+			if err := client.Error(types.NotAuthorized, ""); err != nil {
+				logger.Error(err)
+			}
+			return 1
+		}
+	}
+
 	switch {
+	case message.Action == "authenticate":
+		return authenticate(client, message.User)
 	case message.Action == "msg":
-		/* TODO parse the destination and if the destination exists
-		 * send the message (should work for 1to1 even if the user is
+		/* TODO Fixup message parsing (should work for 1to1 even if the user is
 		 * not currently online (with databasing enabled, otherwise should
-		 * return an error)); if destination doesn't exist return an
-		 * error (for now just return the message itself for testing).
-		 */
+		 * return an error)); if destination doesn't exist return an error. */
 
 		switch {
 		// All room's start with "#"
@@ -65,6 +73,14 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			group := GetGroup(slice[0])
 			if group == nil {
 				if err := client.Error(types.NotFound, "group does not exist"); err != nil {
+					logger.Error(err)
+				}
+				return 0
+			}
+
+			// Block guest connections from messaging outside of group #default.
+			if client.User.Type == "guest" {
+				if err := client.Error(types.Forbidden, "guest account, please authenticate"); err != nil {
 					logger.Error(err)
 				}
 				return 0
@@ -160,6 +176,14 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		group := GetGroup(slice[0])
 		if group == nil {
 			if err := client.Error(types.NotFound, "group does not exist"); err != nil {
+				logger.Error(err)
+			}
+			return 0
+		}
+
+		// Block guest connections from messaging outside of group #default.
+		if client.User.Type == "guest" && group.Title == "default" {
+			if err := client.Error(types.Forbidden, "guest account, please authenticate"); err != nil {
 				logger.Error(err)
 			}
 			return 0

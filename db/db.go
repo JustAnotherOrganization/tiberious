@@ -1,12 +1,28 @@
 package db
 
 import (
-	"tiberious/logger"
+	"strings"
 	"tiberious/settings"
 	"tiberious/types"
 
 	"github.com/pborman/uuid"
 )
+
+/*
+Data map:
+	Redis:
+		Users:
+			Main Key: "user-"+<user-type>+"-"+<loginname>+<uuid> (hash)
+			Joined Rooms: "user-"+<user-type+"-"+<uuid>+"rooms" (set)
+			Joined Groups: "user-"+<user-type+"-"+<uuid>+"groups" (set)
+		Rooms:
+			Info: "room-"+<group name>+<room name>+"-info" (hash)
+			User List: "room-"+<group name>+<room name>+"-list" (set)
+		Groups:
+			Info: "group-"+<group name>+"info" (hash)
+			User List: "group-"+<group name>+"-users" (set)
+			Room List: "group-"+<group name>+"-rooms" (set)
+*/
 
 var config settings.Config
 
@@ -14,43 +30,16 @@ func init() {
 	config = settings.GetConfig()
 }
 
-/* This seems extremely cumbersome but it's the best way I can think to handle
- * this without deleting the entire set and recreating it. */
-func updateSet(key string, new []string) {
-	old, err := rdis.SMembers(key).Result()
-	if err != nil {
-		logger.Error(err)
+// GetKeySet returns all the keys that match a given search pattern.
+func GetKeySet(search string) ([]string, error) {
+	switch {
+	case config.UserDatabase == 0:
+		return rdis.Keys(search).Result()
+	default:
+		break
 	}
 
-	for _, o := range old {
-		var rem = true
-		for _, n := range new {
-			if o == n {
-				rem = false
-			}
-		}
-
-		if rem {
-			if err := rdis.SRem(key, o).Err(); err != nil {
-				logger.Error(err)
-			}
-		}
-	}
-
-	for _, n := range new {
-		var add = true
-		for _, o := range old {
-			if n == o {
-				add = false
-			}
-		}
-
-		if add {
-			if err := rdis.SAdd(key, n).Err(); err != nil {
-				logger.Error(err)
-			}
-		}
-	}
+	return nil, types.NotInDB
 }
 
 // WriteUserData writes a given user object to the current database.
@@ -58,7 +47,7 @@ func WriteUserData(user *types.User) error {
 	switch {
 	case config.UserDatabase == 0:
 		if err := rdis.HMSet(
-			"user-"+user.Type+"-"+user.ID.String(),
+			"user-"+user.Type+"-"+user.LoginName+"-"+user.ID.String(),
 			"id", user.ID.String(),
 			"type", user.Type,
 			"username", user.Username,
@@ -67,7 +56,6 @@ func WriteUserData(user *types.User) error {
 			"password", user.Password,
 			"salt", user.Salt,
 			"connected", strbool(user.Connected),
-			"authorized", strbool(user.Authorized),
 		).Err(); err != nil {
 			return err
 		}
@@ -137,9 +125,9 @@ func WriteGroupData(group *types.Group) error {
 func UserExists(id string) (bool, error) {
 	switch {
 	case config.UserDatabase == 0:
-		res, err := rdis.Keys("user-*-" + id).Result()
+		res, err := GetKeySet("user-*-*-" + id)
 		if err != nil {
-			return false, err
+			return false, nil
 		}
 
 		if len(res) == 0 {
@@ -158,7 +146,7 @@ func UserExists(id string) (bool, error) {
 func RoomExists(gname, rname string) (bool, error) {
 	switch {
 	case config.UserDatabase == 0:
-		res, err := rdis.Keys("room-" + gname + "-" + rname + "*").Result()
+		res, err := GetKeySet("room-" + gname + "-" + rname + "*")
 		if err != nil {
 			return false, err
 		}
@@ -179,7 +167,7 @@ func RoomExists(gname, rname string) (bool, error) {
 func GroupExists(gname string) (bool, error) {
 	switch {
 	case config.UserDatabase == 0:
-		res, err := rdis.Keys("group-" + gname + "-*").Result()
+		res, err := GetKeySet("group-" + gname + "-*")
 		if err != nil {
 			return false, err
 		}
@@ -202,7 +190,7 @@ func GetUserData(id string) (*types.User, error) {
 	case config.UserDatabase == 0:
 		user := new(types.User)
 
-		keys, err := rdis.Keys("user-*-" + id).Result()
+		keys, err := GetKeySet("user-*-*" + id)
 		if err != nil {
 			return nil, err
 		}
@@ -220,7 +208,6 @@ func GetUserData(id string) (*types.User, error) {
 		user.Password = info["password"]
 		user.Salt = info["salt"]
 		user.Connected = boolstr(info["connected"])
-		user.Authorized = boolstr(info["authorized"])
 
 		rooms, err := rdis.SMembers(keys[0] + "-rooms").Result()
 		if err != nil {
@@ -340,4 +327,48 @@ func GetGroupData(gname string) (*types.Group, error) {
 	}
 
 	return nil, types.NotInDB
+}
+
+/*DeleteUser removes a user from all rooms and groups and deletes it from the
+ * database (user sparingly). */
+func DeleteUser(user *types.User) error {
+	for _, gname := range user.Groups {
+		group, err := GetGroupData(gname)
+		if err != nil {
+			return err
+		}
+
+		delete(group.Users, user.ID.String())
+		if err := WriteGroupData(group); err != nil {
+			return err
+		}
+	}
+
+	for _, rname := range user.Rooms {
+		slice := strings.Split(rname, "/")
+		room, err := GetRoomData(slice[0], slice[1])
+		if err != nil {
+			return err
+		}
+
+		delete(room.Users, user.ID.String())
+		if err := WriteRoomData(room); err != nil {
+			return err
+		}
+	}
+
+	switch {
+	case config.UserDatabase == 0:
+		if err := rdis.Del("user-" + user.Type + "-" + user.ID.String() + "-groups").Err(); err != nil {
+			return err
+		}
+		if err := rdis.Del("user-" + user.Type + "-" + user.ID.String() + "-rooms").Err(); err != nil {
+			return err
+		}
+		return rdis.Del("user-" + user.Type + "-" + user.LoginName + "-" + user.ID.String()).Err()
+	default:
+		break
+	}
+
+	return nil
 }

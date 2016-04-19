@@ -12,5 +12,5 @@ type MasterObj struct {
 	// Found in join/part messages
 	Room string `json:"room"`
 	// Found only in authentication messages
-	User []byte `json:"user"`
+	User AuthToken `json:"user"`
 }

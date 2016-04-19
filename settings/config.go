@@ -38,4 +38,6 @@ type Config struct {
 	ErrorLog string `yaml:"errorlog"`
 	// DebugLog allows setting a file location to log standard information.
 	DebugLog string `yaml:"debuglog"`
+	// AllowGuests determines if guest connections are allowed, default is true
+	AllowGuests bool `yaml:"allowguests"`
 }

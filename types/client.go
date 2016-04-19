@@ -11,8 +11,9 @@ type Client struct {
 	// Store the connection interface for each client.
 	Conn *websocket.Conn
 	// Store a user object for each client.
-	User     *User
-	BanScore int
+	User       *User
+	Authorized bool
+	BanScore   int
 }
 
 // NewClient returns a Client
