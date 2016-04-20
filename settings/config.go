@@ -22,7 +22,7 @@ type Config struct {
 	 * MessageStore is enabled) where it will start deleting old messages after
 	 * the Overflow size is reached (0 means they do not overflow) */
 	MessageOverflow int `yaml:"messageoverflow"`
-	/* UserDatabase can be used to select the database type (1 == Redis).
+	/* UserDatabase can be used to select the database type (0 == Redis).
 	 * If set to 1 RedisHost, RedisPass and RedisUser must be set. */
 	UserDatabase int `yaml:"userdatabase"`
 	/* RedisHost will need to be set if using built in redis handling:
@@ -38,4 +38,6 @@ type Config struct {
 	ErrorLog string `yaml:"errorlog"`
 	// DebugLog allows setting a file location to log standard information.
 	DebugLog string `yaml:"debuglog"`
+	// AllowGuests determines if guest connections are allowed, default is true
+	AllowGuests bool `yaml:"allowguests"`
 }

@@ -1,62 +1,58 @@
 package handlers
 
 import (
+	"log"
+	"strings"
 	"tiberious/db"
+	"tiberious/logger"
 	"tiberious/settings"
 	"tiberious/types"
 )
 
 var (
-	groups = make(map[string]*types.Group)
-	config settings.Config
+	defgroup *types.Group
+	config   settings.Config
 )
 
 func init() {
 	config = settings.GetConfig()
-	defgroup := GetNewGroup("#default", true)
+	defgroup = GetNewGroup("#default")
+	/* We can't get a room from the default group without first writing the
+	 * group data (on first start). */
+	if err := WriteGroupData(defgroup); err != nil {
+		log.Fatalln(err)
+	}
+
 	genroom := GetNewRoom("#default", "#general")
-	if config.UserDatabase != 0 {
-		WriteGroupData(defgroup)
-		WriteRoomData(genroom)
+	if err := WriteRoomData(genroom); err != nil {
+		log.Fatalln(err)
 	}
 }
 
 // GetGroup check if a group exists and if so return it
 func GetGroup(gname string) *types.Group {
-	// Only the default group exists with UserDatabase disabled.
-	if config.UserDatabase == 0 && gname != "#default" {
-		return nil
+	gexists, err := db.GroupExists(gname)
+	if err != nil {
+		logger.Error(err)
 	}
-
-	var gexists = false
-	var group *types.Group
-	for k, g := range groups {
-		if gname == k {
-			group = g
-			gexists = true
-			break
-		}
-	}
-
 	if !gexists {
 		return nil
+	}
+
+	group, err := db.GetGroupData(gname)
+	if err != nil {
+		logger.Error(err)
 	}
 
 	return group
 }
 
-/*GetNewGroup should ony be used if the group doesn't already exist
- * and should not be called if the UserDatabase is disabled. */
-func GetNewGroup(gname string, init bool) *types.Group {
-	if config.UserDatabase == 0 && !init {
-		return nil
-	}
-
+// GetNewGroup should ony be used if the group doesn't already exist
+func GetNewGroup(gname string) *types.Group {
 	group := new(types.Group)
 	group.Title = gname
 	group.Rooms = make(map[string]*types.Room)
 	group.Users = make(map[string]*types.User)
-	groups[gname] = group
 	return group
 }
 
@@ -72,18 +68,18 @@ func GetRoom(gname, rname string) *types.Room {
 		return nil
 	}
 
-	var rexists = false
-	var room *types.Room
-
-	for _, r := range group.Rooms {
-		if rname == r.Title {
-			room = r
-			rexists = true
-		}
+	rexists, err := db.RoomExists(gname, rname)
+	if err != nil {
+		logger.Error(err)
 	}
 
 	if !rexists {
 		return nil
+	}
+
+	room, err := db.GetRoomData(gname, rname)
+	if err != nil {
+		logger.Error(err)
 	}
 
 	return room
@@ -104,10 +100,18 @@ func GetNewRoom(gname, rname string) *types.Room {
 	room.Private = false
 
 	group.Rooms[rname] = room
+
+	WriteGroupData(group)
+
 	return room
 }
 
 // WriteRoomData writes the given room object to the current database.
 func WriteRoomData(room *types.Room) error {
 	return db.WriteRoomData(room)
+}
+
+// IsRoomName returns whether a string starts with "#"
+func IsRoomName(str string) bool {
+	return strings.HasPrefix(str, "#")
 }

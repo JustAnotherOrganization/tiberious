@@ -12,22 +12,21 @@ import (
 
 //User ...
 type User struct {
-	ID         uuid.UUID
-	Type       string
-	Username   string
-	LoginName  string
-	Email      string
-	Password   string
-	Salt       string
-	Connected  bool
-	Authorized bool
-	Rooms      []string
-	Groups     []string
+	ID        uuid.UUID
+	Type      string
+	Username  string
+	LoginName string
+	Email     string
+	Password  string
+	Salt      string
+	Connected bool
+	Rooms     []string
+	Groups    []string
 }
 
 //HashPassword ..
 func HashPassword(password, salt string) string {
-	return string(base64.StdEncoding.EncodeToString(pbkdf2.Key([]byte(password), []byte(salt), 4096, 32, sha256.New))) 
+	return string(base64.StdEncoding.EncodeToString(pbkdf2.Key([]byte(password), []byte(salt), 4096, 32, sha256.New)))
 }
 
 func (user *User) isPassword(passwordTest string) bool {
