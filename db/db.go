@@ -209,7 +209,7 @@ func GetUserData(id string) (*types.User, error) {
 		user.Salt = info["salt"]
 		user.Connected = boolstr(info["connected"])
 
-		rooms, err := rdis.SMembers(keys[0] + "-rooms").Result()
+		rooms, err := rdis.SMembers("user-" + user.Type + "-" + user.ID.String() + "-rooms").Result()
 		if err != nil {
 			return nil, err
 		}
@@ -218,7 +218,7 @@ func GetUserData(id string) (*types.User, error) {
 			user.Rooms = rooms
 		}
 
-		groups, err := rdis.SMembers(keys[0] + "-groups").Result()
+		groups, err := rdis.SMembers("user-" + user.Type + "-" + user.ID.String() + "-groups").Result()
 		if err != nil {
 			return nil, err
 		}
