@@ -6,6 +6,7 @@ import (
 	"tiberious/types"
 
 	"github.com/pborman/uuid"
+	"github.com/pkg/errors"
 )
 
 /*
@@ -24,7 +25,11 @@ Data map:
 			Room List: "group-"+<group name>+"-rooms" (set)
 */
 
-var config settings.Config
+var (
+	config settings.Config
+	// ErrNotInDB ...
+	ErrNotInDB = errors.New("not found in db")
+)
 
 func init() {
 	config = settings.GetConfig()
@@ -39,7 +44,7 @@ func GetKeySet(search string) ([]string, error) {
 		break
 	}
 
-	return nil, types.NotInDB
+	return nil, ErrNotInDB
 }
 
 // WriteUserData writes a given user object to the current database.
@@ -57,7 +62,7 @@ func WriteUserData(user *types.User) error {
 			"salt", user.Salt,
 			"connected", strbool(user.Connected),
 		).Err(); err != nil {
-			return err
+			return errors.Wrap(err, "rdis.HMSet")
 		}
 
 		go updateSet("user-"+user.Type+"-"+user.ID.String()+"-rooms", user.Rooms)
@@ -74,8 +79,9 @@ func WriteUserData(user *types.User) error {
 func WriteRoomData(room *types.Room) error {
 	switch {
 	case config.UserDatabase == 0:
-		if err := rdis.HMSet("room-"+room.Group+"-"+room.Title+"-info", "title", room.Title, "group", room.Group, "private", strbool(room.Private)).Err(); err != nil {
-			return err
+		str := "room-" + room.Group + "-" + room.Title + "-info"
+		if err := rdis.HMSet(str, "title", room.Title, "group", room.Group, "private", strbool(room.Private)).Err(); err != nil {
+			return errors.Wrapf(err, "rdis.HMSet %s", str)
 		}
 
 		var slice []string
@@ -96,8 +102,9 @@ func WriteRoomData(room *types.Room) error {
 func WriteGroupData(group *types.Group) error {
 	switch {
 	case config.UserDatabase == 0:
-		if err := rdis.HSet("group-"+group.Title+"-info", "title", group.Title).Err(); err != nil {
-			return err
+		str := "group-" + group.Title + "-info"
+		if err := rdis.HSet(str, "title", group.Title).Err(); err != nil {
+			return errors.Wrapf(err, "rdis.HSet %s", str)
 		}
 
 		var slice []string
@@ -125,9 +132,10 @@ func WriteGroupData(group *types.Group) error {
 func UserExists(id string) (bool, error) {
 	switch {
 	case config.UserDatabase == 0:
-		res, err := GetKeySet("user-*-*-" + id)
+		str := "user-*-*-" + id
+		res, err := GetKeySet(str)
 		if err != nil {
-			return false, nil
+			return false, errors.Wrapf(err, "GetKeySet %s", str)
 		}
 
 		if len(res) == 0 {
@@ -146,9 +154,10 @@ func UserExists(id string) (bool, error) {
 func RoomExists(gname, rname string) (bool, error) {
 	switch {
 	case config.UserDatabase == 0:
-		res, err := GetKeySet("room-" + gname + "-" + rname + "*")
+		str := "room-" + gname + "-" + rname + "*"
+		res, err := GetKeySet(str)
 		if err != nil {
-			return false, err
+			return false, errors.Wrapf(err, "GetKeySet %s", str)
 		}
 
 		if len(res) == 0 {
@@ -167,9 +176,10 @@ func RoomExists(gname, rname string) (bool, error) {
 func GroupExists(gname string) (bool, error) {
 	switch {
 	case config.UserDatabase == 0:
-		res, err := GetKeySet("group-" + gname + "-*")
+		str := "group-" + gname + "-*"
+		res, err := GetKeySet(str)
 		if err != nil {
-			return false, err
+			return false, errors.Wrapf(err, "GetKeySet %s", str)
 		}
 
 		if len(res) == 0 {
@@ -190,9 +200,10 @@ func GetUserData(id string) (*types.User, error) {
 	case config.UserDatabase == 0:
 		user := new(types.User)
 
-		keys, err := GetKeySet("user-*-*-" + id)
+		str := "user-*-*-" + id
+		keys, err := GetKeySet(str)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "GetKeySet %s", str)
 		}
 
 		if len(keys) == 0 {
@@ -201,7 +212,7 @@ func GetUserData(id string) (*types.User, error) {
 
 		info, err := rdis.HGetAllMap(keys[0]).Result()
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "rdis.HGetAllMap %s", keys[0])
 		}
 
 		user.ID = uuid.Parse(info["id"])
@@ -213,18 +224,20 @@ func GetUserData(id string) (*types.User, error) {
 		user.Salt = info["salt"]
 		user.Connected = boolstr(info["connected"])
 
-		rooms, err := rdis.SMembers("user-" + user.Type + "-" + user.ID.String() + "-rooms").Result()
+		str = "user-" + user.Type + "-" + user.ID.String() + "-rooms"
+		rooms, err := rdis.SMembers(str).Result()
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "rdis.SMembers %s", str)
 		}
 
 		if len(rooms) > 0 {
 			user.Rooms = rooms
 		}
 
-		groups, err := rdis.SMembers("user-" + user.Type + "-" + user.ID.String() + "-groups").Result()
+		str = "user-" + user.Type + "-" + user.ID.String() + "-groups"
+		groups, err := rdis.SMembers(str).Result()
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "rdis.SMembers %s", str)
 		}
 
 		if len(groups) > 0 {
@@ -236,7 +249,7 @@ func GetUserData(id string) (*types.User, error) {
 		break
 	}
 
-	return nil, types.NotInDB
+	return nil, ErrNotInDB
 }
 
 // GetRoomData gets all the data for a given room (group required) from the database
@@ -246,18 +259,20 @@ func GetRoomData(gname, rname string) (*types.Room, error) {
 		room := new(types.Room)
 		room.Users = make(map[string]*types.User)
 
-		info, err := rdis.HGetAllMap("room-" + gname + "-" + rname + "-info").Result()
+		str := "room-" + gname + "-" + rname + "-info"
+		info, err := rdis.HGetAllMap(str).Result()
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "rdis.HGetAllMap %s", err)
 		}
 
 		room.Title = info["title"]
 		room.Group = info["group"]
 		room.Private = boolstr(info["private"])
 
-		users, err := rdis.SMembers("room-" + gname + "-" + rname + "-list").Result()
+		str = "room-" + gname + "-" + rname + "-list"
+		users, err := rdis.SMembers(str).Result()
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "rdis.SMembers %s", str)
 		}
 
 		room.Users = make(map[string]*types.User)
@@ -265,7 +280,7 @@ func GetRoomData(gname, rname string) (*types.Room, error) {
 			for _, v := range users {
 				u, err := GetUserData(v)
 				if err != nil {
-					return nil, err
+					return nil, errors.Wrapf(err, "GetUserData %s", v)
 				}
 				room.Users[u.ID.String()] = u
 			}
@@ -276,7 +291,7 @@ func GetRoomData(gname, rname string) (*types.Room, error) {
 		break
 	}
 
-	return nil, types.NotInDB
+	return nil, ErrNotInDB
 }
 
 // GetGroupData gets all the data for a given group from the database
@@ -289,9 +304,10 @@ func GetGroupData(gname string) (*types.Group, error) {
 		group.Rooms = make(map[string]*types.Room)
 		group.Users = make(map[string]*types.User)
 
-		users, err := rdis.SMembers("group-" + gname + "-users").Result()
+		str := "group-" + gname + "-users"
+		users, err := rdis.SMembers(str).Result()
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "rdis.SMembers %s", str)
 		}
 
 		if len(users) > 0 {
@@ -302,16 +318,17 @@ func GetGroupData(gname string) (*types.Group, error) {
 				if v != "" {
 					u, stat := GetUserData(v)
 					if stat != nil {
-						return nil, stat
+						return nil, errors.Wrapf(stat, "GetUserData %s", v)
 					}
 					group.Users[u.ID.String()] = u
 				}
 			}
 		}
 
-		rooms, err := rdis.SMembers("group-" + gname + "-rooms").Result()
+		str = "group-" + gname + "-rooms"
+		rooms, err := rdis.SMembers(str).Result()
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "rdis.SMembers %s", str)
 		}
 
 		if len(rooms) > 0 {
@@ -319,7 +336,7 @@ func GetGroupData(gname string) (*types.Group, error) {
 				if v != "" {
 					r, err := GetRoomData(gname, v)
 					if err != nil {
-						return nil, err
+						return nil, errors.Wrapf(err, "GetRoomData %s", v)
 					}
 					group.Rooms[r.Title] = r
 				}
@@ -331,7 +348,7 @@ func GetGroupData(gname string) (*types.Group, error) {
 		break
 	}
 
-	return nil, types.NotInDB
+	return nil, ErrNotInDB
 }
 
 /*DeleteUser removes a user from all rooms and groups and deletes it from the
@@ -340,12 +357,12 @@ func DeleteUser(user *types.User) error {
 	for _, gname := range user.Groups {
 		group, err := GetGroupData(gname)
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "GetGroupData %s", gname)
 		}
 
 		delete(group.Users, user.ID.String())
 		if err := WriteGroupData(group); err != nil {
-			return err
+			return errors.Wrapf(err, "WriteGroupData %s", group)
 		}
 	}
 
@@ -353,24 +370,29 @@ func DeleteUser(user *types.User) error {
 		slice := strings.Split(rname, "/")
 		room, err := GetRoomData(slice[0], slice[1])
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "GetRoomData %s/%s", slice[0], slice[1])
 		}
 
 		delete(room.Users, user.ID.String())
 		if err := WriteRoomData(room); err != nil {
-			return err
+			return errors.Wrapf(err, "WriteRoomData %s", room)
 		}
 	}
 
 	switch {
 	case config.UserDatabase == 0:
-		if err := rdis.Del("user-" + user.Type + "-" + user.ID.String() + "-groups").Err(); err != nil {
-			return err
+		str := "user-" + user.Type + "-" + user.ID.String() + "-groups"
+		if err := rdis.Del(str).Err(); err != nil {
+			return errors.Wrapf(err, "rdis.Del", str)
 		}
-		if err := rdis.Del("user-" + user.Type + "-" + user.ID.String() + "-rooms").Err(); err != nil {
-			return err
+		str = "user-" + user.Type + "-" + user.ID.String() + "-rooms"
+		if err := rdis.Del(str).Err(); err != nil {
+			return errors.Wrapf(err, "rdis.Del", str)
 		}
-		return rdis.Del("user-" + user.Type + "-" + user.LoginName + "-" + user.ID.String()).Err()
+		str = "user-" + user.Type + "-" + user.LoginName + "-" + user.ID.String()
+		if err := rdis.Del(str).Err(); err != nil {
+			return errors.Wrapf(err, "rdis.Del", str)
+		}
 	default:
 		break
 	}

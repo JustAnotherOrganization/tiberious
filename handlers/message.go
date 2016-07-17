@@ -8,7 +8,9 @@ import (
 	"tiberious/logger"
 	"tiberious/types"
 
+	"github.com/JustAnotherOrganization/jgordon"
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 )
 
 func relayToRoom(room *types.Room, rawmsg []byte) {
@@ -34,23 +36,25 @@ func relayToGroup(group *types.Group, rawmsg []byte) {
 func ParseMessage(client *types.Client, rawmsg []byte) int {
 	var message types.MasterObj
 	if err := json.Unmarshal(rawmsg, &message); err != nil {
-		if err := client.Error(types.BadRequestOrObject, "invalid object"); err != nil {
-			logger.Error(err)
+		str := "invalid object"
+		if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
+			logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 		}
 		return 0
 	}
 
 	if message.Time <= 0 {
-		if err := client.Error(types.BadRequestOrObject, "missing or invalid time"); err != nil {
-			logger.Error(err)
+		str := "missing or invalid time"
+		if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
+			logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 		}
 		return 0
 	}
 
 	if !config.AllowGuests && !client.Authorized {
 		if message.Action != "authenticate" {
-			if err := client.Error(types.NotAuthorized, ""); err != nil {
-				logger.Error(err)
+			if err := client.Error(jgordon.NotAuthorized, ""); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotAuthorized))
 			}
 			return 1
 		}
@@ -68,24 +72,27 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		// All room's start with "#"
 		case IsRoomName(message.To):
 			if !strings.Contains(message.To, "/") {
-				if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
-					logger.Error(err)
+				str := "room names should be type of 'group/room'"
+				if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
+					logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 				}
 				return 0
 			}
 			slice := strings.Split(message.To, "/")
 			group := GetGroup(slice[0])
 			if group == nil {
-				if err := client.Error(types.NotFound, "group does not exist"); err != nil {
-					logger.Error(err)
+				str := "group does not exist"
+				if err := client.Error(jgordon.NotFound, str); err != nil {
+					logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.NotFound, str))
 				}
 				return 0
 			}
 
 			// Block guest connections from messaging outside of group #default.
 			if client.User.Type == "guest" && group.Title != "#default" {
-				if err := client.Error(types.Forbidden, "guest account, please authenticate"); err != nil {
-					logger.Error(err)
+				str := "guest account, please authenticate"
+				if err := client.Error(jgordon.Forbidden, str); err != nil {
+					logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.Forbidden, str))
 				}
 				return 0
 			}
@@ -99,16 +106,16 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			}
 
 			if !member {
-				if err := client.Error(types.Forbidden, ""); err != nil {
-					logger.Error(err)
+				if err := client.Error(jgordon.Forbidden, ""); err != nil {
+					logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.Forbidden))
 				}
 				return 1
 			}
 
 			room := GetRoom(slice[0], slice[1])
 			if room == nil {
-				if err := client.Error(types.NotFound, ""); err != nil {
-					logger.Error(err)
+				if err := client.Error(jgordon.NotFound, ""); err != nil {
+					logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotFound))
 				}
 				return 0
 			}
@@ -122,8 +129,8 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			}
 
 			if room.Private && !member {
-				if err := client.Error(types.Forbidden, ""); err != nil {
-					log.Fatalln(err)
+				if err := client.Error(jgordon.Forbidden, ""); err != nil {
+					log.Fatalln(errors.Wrapf(err, "client.Error %s", jgordon.Forbidden))
 				}
 				return 1
 			}
@@ -148,53 +155,58 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 				break
 			}
 
-			if err := client.Error(types.NotFound, ""); err != nil {
-				logger.Error(err)
+			if err := client.Error(jgordon.NotFound, ""); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotFound))
 			}
 
 			return 0
 		}
 
 		// Send a response back saying the message was sent.
-		if err := client.Alert(types.OK, ""); err != nil {
-			logger.Error(err)
+		if err := client.Alert(jgordon.OK, ""); err != nil {
+			logger.Error(errors.Wrapf(err, "client.Alert %s", jgordon.OK))
 		}
 
 		break
 	// Join messages should include both a group and a room name.
 	case message.Action == "join":
 		if !IsRoomName(message.Room) {
-			if err := client.Error(types.BadRequestOrObject, "room names should start with '#'"); err != nil {
-				logger.Error(err)
+			str := "room names should start with '#'"
+			if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 			}
 			return 0
 		}
 
 		if !strings.Contains(message.Room, "/") {
-			if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
-				logger.Error(err)
+			str := "room names should be type of 'group/room'"
+			if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 			}
 			return 0
 		}
 		slice := strings.Split(message.Room, "/")
 		if len(slice) != 2 {
-			if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
-				logger.Error(err)
+			str := "room names should be type of 'group/room'"
+			if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 			}
 			return 0
 		}
 		group := GetGroup(slice[0])
 		if group == nil {
-			if err := client.Error(types.NotFound, "group does not exist"); err != nil {
-				logger.Error(err)
+			str := "group does not exist"
+			if err := client.Error(jgordon.NotFound, str); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.NotFound, str))
 			}
 			return 0
 		}
 
 		// Block guest connections from messaging outside of group #default.
 		if client.User.Type == "guest" && group.Title != "#default" {
-			if err := client.Error(types.Forbidden, "guest account, please authenticate"); err != nil {
-				logger.Error(err)
+			str := "guest account, please authenticate"
+			if err := client.Error(jgordon.Forbidden, str); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.Forbidden, str))
 			}
 			return 0
 		}
@@ -208,8 +220,8 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		}
 
 		if !member {
-			if err := client.Error(types.Forbidden, ""); err != nil {
-				logger.Error(err)
+			if err := client.Error(jgordon.Forbidden, ""); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.Forbidden))
 			}
 			return 1
 		}
@@ -225,35 +237,38 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 
 		// Update the room data for the database.
 		if err := WriteRoomData(room); err != nil {
-			logger.Error(err)
+			logger.Error(errors.Wrapf(err, "WriteRoomData %s", room))
 		}
 
 		// Send a response back confirming we joined the room..
-		if err := client.Alert(types.OK, ""); err != nil {
-			logger.Error(err)
+		if err := client.Alert(jgordon.OK, ""); err != nil {
+			logger.Error(errors.Wrapf(err, "client.Alert %s", jgordon.OK))
 		}
 
 		break
 	case message.Action == "leave":
 	case message.Action == "part":
 		if !IsRoomName(message.Room) {
-			if err := client.Error(types.BadRequestOrObject, "room names should start with '#'"); err != nil {
-				logger.Error(err)
+			str := "room names should start with '#'"
+			if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject))
 			}
 			return 0
 		}
 
 		if !strings.Contains(message.Room, "/") {
-			if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
-				logger.Error(err)
+			str := "room names should be type of 'group/room'"
+			if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 			}
 			return 0
 		}
 		slice := strings.Split(message.Room, "/")
 		group := GetGroup(slice[0])
 		if group == nil {
-			if err := client.Error(types.NotFound, "group does not exist"); err != nil {
-				logger.Error(err)
+			str := "group does not exist"
+			if err := client.Error(jgordon.NotFound, str); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.NotFound, str))
 			}
 			return 0
 		}
@@ -261,8 +276,8 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		var room *types.Room
 		room = GetRoom(slice[0], slice[1])
 		if room == nil {
-			if err := client.Error(types.NotFound, ""); err != nil {
-				logger.Error(err)
+			if err := client.Error(jgordon.NotFound, ""); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotFound))
 			}
 			break
 		}
@@ -277,8 +292,8 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 
 		if !ispresent {
 			// TODO should this return a different error number?
-			if err := client.Error(types.Gone, ""); err != nil {
-				logger.Error(err)
+			if err := client.Error(jgordon.Gone, ""); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.Gone))
 			}
 			break
 		}
@@ -287,18 +302,18 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 
 		// Update the room data for the database.
 		if err := WriteRoomData(room); err != nil {
-			logger.Error(err)
+			logger.Error(errors.Wrapf(err, "WriteRoomData %s", room))
 		}
 
 		// Send a response back confirming we left the room..
-		if err := client.Alert(types.OK, ""); err != nil {
-			logger.Error(err)
+		if err := client.Alert(jgordon.OK, ""); err != nil {
+			logger.Error(errors.Wrapf(err, "client.Alert %s", jgordon.OK))
 		}
 
 		break
 	default:
-		if err := client.Error(types.BadRequestOrObject, ""); err != nil {
-			logger.Error(err)
+		if err := client.Error(jgordon.BadRequestOrObject, ""); err != nil {
+			logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.BadRequestOrObject))
 		}
 		break
 	}

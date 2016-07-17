@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/json"
 
+	"github.com/JustAnotherOrganization/jgordon"
 	"github.com/gorilla/websocket"
 )
 
@@ -22,8 +23,8 @@ func NewClient() (client *Client) {
 }
 
 // Alert sends an alert with the current timestamp
-func (c Client) Alert(code int, message string) error {
-	ret, err := json.Marshal(NewAlert(code, message))
+func (c Client) Alert(code int32, message string) error {
+	ret, err := json.Marshal(jgordon.NewAlert(code, message))
 
 	if err != nil {
 		return err
@@ -34,8 +35,8 @@ func (c Client) Alert(code int, message string) error {
 }
 
 // Error sends an error with the current timestamp
-func (c Client) Error(code int, message string) error {
-	ret, err := json.Marshal(NewError(code, message))
+func (c Client) Error(code int32, message string) error {
+	ret, err := json.Marshal(jgordon.NewError(code, message))
 
 	if err != nil {
 		return err

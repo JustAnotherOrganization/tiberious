@@ -28,12 +28,12 @@ func TestGetGroup(t *testing.T) {
 func TestGetNewGroup(t *testing.T) {
 	var g *types.Group
 	// No database is enabled, should return nil
-	g = GetNewGroup("#anything", false)
+	g = GetNewGroup("#anything")
 	if g != nil {
 		t.Fail()
 	}
 
-	g = GetNewGroup("#test", true)
+	g = GetNewGroup("#test")
 	if g == nil {
 		t.Fail()
 	}

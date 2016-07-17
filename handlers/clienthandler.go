@@ -7,8 +7,10 @@ import (
 	"tiberious/logger"
 	"tiberious/types"
 
+	"github.com/JustAnotherOrganization/jgordon"
 	"github.com/gorilla/websocket"
 	"github.com/pborman/uuid"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -18,12 +20,12 @@ var (
 func authenticate(client *types.Client, token types.AuthToken) int {
 	keys, err := db.GetKeySet("user-*-" + token.AccountName + "-*")
 	if err != nil {
-		logger.Error(err)
+		logger.Error(errors.Wrapf(err, "db.GetKeySet %s", token.AccountName))
 	}
 
 	if len(keys) == 0 {
-		if err := client.Error(types.IncorrectCredentials, ""); err != nil {
-			logger.Error(err)
+		if err := client.Error(jgordon.IncorrectCredentials, ""); err != nil {
+			logger.Error(errors.Wrap(err, "client.Error"))
 		}
 
 		return 1
@@ -32,9 +34,9 @@ func authenticate(client *types.Client, token types.AuthToken) int {
 	slice := strings.Split(keys[0], "-")
 	user, err := db.GetUserData(strings.Join(slice[3:], "-"))
 	if err != nil {
-		if err == types.NotInDB {
-			if err := client.Error(types.IncorrectCredentials, ""); err != nil {
-				logger.Error(err)
+		if err == db.ErrNotInDB {
+			if err := client.Error(jgordon.IncorrectCredentials, ""); err != nil {
+				logger.Error(errors.Wrap(err, "client.Error"))
 			}
 		} else {
 			logger.Error(err)
@@ -42,8 +44,8 @@ func authenticate(client *types.Client, token types.AuthToken) int {
 	}
 
 	if token.Password != user.Password {
-		if err := client.Error(types.IncorrectCredentials, ""); err != nil {
-			logger.Error(err)
+		if err := client.Error(jgordon.IncorrectCredentials, ""); err != nil {
+			logger.Error(errors.Wrap(err, "client.Error"))
 		}
 
 		return 1
@@ -51,7 +53,7 @@ func authenticate(client *types.Client, token types.AuthToken) int {
 
 	if client.User.Type == "guest" {
 		if err := db.DeleteUser(client.User); err != nil {
-			logger.Error(err)
+			logger.Error(errors.Wrapf(err, "db.DeleteUser %s", client.User.ID.String()))
 		}
 	}
 
@@ -63,13 +65,13 @@ func authenticate(client *types.Client, token types.AuthToken) int {
 	client.Authorized = true
 	client.User.Connected = true
 	if err := db.WriteUserData(client.User); err != nil {
-		logger.Error(err)
+		logger.Error(errors.Wrapf(err, "db.WriteUserData %s", client.User.ID.String()))
 	}
 
 	clients[client.User.ID.String()] = client
 
-	if err := client.Alert(types.OK, ""); err != nil {
-		logger.Error(err)
+	if err := client.Alert(jgordon.OK, ""); err != nil {
+		logger.Error(errors.Wrap(err, "client.Alert"))
 	}
 
 	return 0
@@ -84,7 +86,7 @@ func getUniqueID() uuid.UUID {
 		id = uuid.NewRandom()
 		exists, err := db.UserExists(id.String())
 		if err != nil {
-			logger.Error(err)
+			logger.Error(errors.Wrapf(err, "db.UserExists %s", id.String()))
 		}
 		if exists {
 			continue
@@ -103,9 +105,10 @@ func ClientHandler(conn *websocket.Conn) {
 	// Set the UUID and initialize a username of "guest"
 	client.User.ID = getUniqueID()
 
-	guests, err := db.GetKeySet("user-guest-*-*")
+	str := "user-guest-*-*"
+	guests, err := db.GetKeySet(str)
 	if err != nil {
-		logger.Error(err)
+		logger.Error(errors.Wrapf(err, "db.GetKeySet %s", str))
 	}
 
 	// TODO give guests a numeric suffix, allow disabling guest connections.
@@ -133,20 +136,20 @@ func ClientHandler(conn *websocket.Conn) {
 		logger.Info("new client connected")
 	}
 
-	if err := client.Alert(types.OK, ""); err != nil {
-		logger.Error(err)
+	if err := client.Alert(jgordon.OK, ""); err != nil {
+		logger.Error(errors.Wrap(err, "client.Alert"))
 	}
 
 	/* TODO we may want to remove this later it's just for easy testing.
 	 * to allow a client to get their UUID back from the server after
 	 * connecting. */
 	if config.AllowGuests {
-		if err := client.Alert(types.GeneralNotice, string("Connected as guest with ID "+client.User.ID.String())); err != nil {
-			logger.Error(err)
+		if err := client.Alert(jgordon.GeneralNotice, string("Connected as guest with ID "+client.User.ID.String())); err != nil {
+			logger.Error(errors.Wrap(err, "client.Alert"))
 		}
 	} else {
-		if err := client.Alert(types.ImportantNotice, "No Guests Allowed : send authentication token to continue"); err != nil {
-			logger.Error(err)
+		if err := client.Alert(jgordon.ImportantNotice, "No Guests Allowed : send authentication token to continue"); err != nil {
+			logger.Error(errors.Wrap(err, "client.Alert"))
 		}
 	}
 
@@ -186,7 +189,7 @@ func ClientHandler(conn *websocket.Conn) {
 	if client.User != nil {
 		if client.User.Type == "guest" {
 			if err := db.DeleteUser(client.User); err != nil {
-				logger.Error(err)
+				logger.Error(errors.Wrapf(err, "db.DeleteUser %s", client.User.ID.String()))
 			}
 		} else {
 			client.User.Connected = false
