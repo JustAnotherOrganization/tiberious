@@ -123,13 +123,22 @@ func ClientHandler(conn *websocket.Conn) {
 		defgroup := GetGroup("#default")
 		defgroup.Users[client.User.ID.String()] = client.User
 		client.User.Groups = append(client.User.Groups, "#default")
-		room := GetRoom("#default", "#general")
+		room, err := GetRoom("#default", "#general")
+		if err != nil {
+			logger.Error(errors.Wrap(err, "GetRoom"))
+		}
 		client.User.Rooms = append(client.User.Rooms, "#default/#general")
 		room.Users[client.User.ID.String()] = client.User
 
-		db.WriteUserData(client.User)
-		db.WriteGroupData(defgroup)
-		db.WriteRoomData(room)
+		if err := db.WriteUserData(client.User); err != nil {
+			logger.Error(errors.Wrapf(err, "db.WriteUserData %s", client.User.ID.String()))
+		}
+		if err := db.WriteGroupData(defgroup); err != nil {
+			logger.Error(errors.Wrapf(err, "db.WriteGroupData %s", defgroup.Title))
+		}
+		if err := db.WriteRoomData(room); err != nil {
+			logger.Error(errors.Wrapf(err, "db.WriteRoomData %s", room))
+		}
 
 		logger.Info("guest", client.User.ID.String(), "connected")
 	} else {

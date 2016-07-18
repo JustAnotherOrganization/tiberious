@@ -112,7 +112,11 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 				return 1
 			}
 
-			room := GetRoom(slice[0], slice[1])
+			room, err := GetRoom(slice[0], slice[1])
+			if err != nil {
+				logger.Error(errors.Wrapf(err, "GetRoom %s/%s", slice[0], slice[1]))
+			}
+
 			if room == nil {
 				if err := client.Error(jgordon.NotFound, ""); err != nil {
 					logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotFound))
@@ -226,11 +230,13 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			return 1
 		}
 
+		// Use GetNewRoom cause it will just grab the existing one if it does
+		// in fact exists.
 		// TODO implement private rooms
-		room := GetRoom(slice[0], slice[1])
-		if room == nil {
-			room = GetNewRoom(slice[0], slice[1])
-			room.Users = make(map[string]*types.User)
+		room, err := GetNewRoom(slice[0], slice[1])
+		if err != nil {
+			logger.Error(errors.Wrapf(err, "GetNewRoom %s/%s", slice[0], slice[1]))
+			return 0
 		}
 
 		room.Users[client.User.ID.String()] = client.User
@@ -273,8 +279,11 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			return 0
 		}
 
-		var room *types.Room
-		room = GetRoom(slice[0], slice[1])
+		room, err := GetRoom(slice[0], slice[1])
+		if err != nil {
+			logger.Error(errors.Wrapf(err, "GetRoom %s/%s", slice[0], slice[1]))
+			return 0
+		}
 		if room == nil {
 			if err := client.Error(jgordon.NotFound, ""); err != nil {
 				logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotFound))

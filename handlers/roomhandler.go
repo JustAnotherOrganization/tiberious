@@ -7,6 +7,8 @@ import (
 	"tiberious/logger"
 	"tiberious/settings"
 	"tiberious/types"
+
+	"github.com/pkg/errors"
 )
 
 var (
@@ -23,7 +25,11 @@ func init() {
 		log.Fatalln(err)
 	}
 
-	genroom := GetNewRoom("#default", "#general")
+	genroom, err := GetNewRoom("#default", "#general")
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	if err := WriteRoomData(genroom); err != nil {
 		log.Fatalln(err)
 	}
@@ -49,6 +55,14 @@ func GetGroup(gname string) *types.Group {
 
 // GetNewGroup should ony be used if the group doesn't already exist
 func GetNewGroup(gname string) *types.Group {
+	gexists, err := db.GroupExists(gname)
+	if err != nil {
+		logger.Error(errors.Wrapf(err, "db.GroupExists %s", gname))
+	}
+	if gexists {
+		return GetGroup(gname)
+	}
+
 	group := new(types.Group)
 	group.Title = gname
 	group.Rooms = make(map[string]*types.Room)
@@ -62,35 +76,43 @@ func WriteGroupData(group *types.Group) error {
 }
 
 // GetRoom check if a room exists (requires group) and if so return it
-func GetRoom(gname, rname string) *types.Room {
+func GetRoom(gname, rname string) (*types.Room, error) {
 	group := GetGroup(gname)
 	if group == nil {
-		return nil
+		return nil, errors.Errorf("Group doesn't exist %s", gname)
 	}
 
 	rexists, err := db.RoomExists(gname, rname)
 	if err != nil {
-		logger.Error(err)
+		return nil, errors.Wrapf(err, "db.RoomExists %s/%s", gname, rname)
 	}
 
 	if !rexists {
-		return nil
+		return nil, errors.Errorf("Room doesn't exist %s", rname)
 	}
 
 	room, err := db.GetRoomData(gname, rname)
 	if err != nil {
-		logger.Error(err)
+		return nil, errors.Wrapf(err, "db.GetRoomData %s/%s", gname, rname)
 	}
 
-	return room
+	return room, nil
 }
 
-/*GetNewRoom should only be used if the room doesn't already exist in the
- * provided group. */
-func GetNewRoom(gname, rname string) *types.Room {
+// GetNewRoom works both if a room exists and if it doesn't.
+func GetNewRoom(gname, rname string) (*types.Room, error) {
 	group := GetGroup(gname)
 	if group == nil {
-		return nil
+		return nil, errors.Errorf("Group doesn't exist %s", gname)
+	}
+
+	rexist, err := db.RoomExists(gname, rname)
+	if err != nil {
+		return nil, errors.Wrapf(err, "db.RoomExists %s/%s", gname, rname)
+	}
+
+	if rexist {
+		return GetRoom(gname, rname)
 	}
 
 	room := new(types.Room)
@@ -101,9 +123,12 @@ func GetNewRoom(gname, rname string) *types.Room {
 
 	group.Rooms[rname] = room
 
-	WriteGroupData(group)
+	err = WriteGroupData(group)
+	if err != nil {
+		return nil, errors.Wrapf(err, "WriteGroupData %s", group.Title)
+	}
 
-	return room
+	return room, nil
 }
 
 // WriteRoomData writes the given room object to the current database.
