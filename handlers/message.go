@@ -31,6 +31,107 @@ func relayToGroup(group *types.Group, rawmsg []byte) {
 	}
 }
 
+func handlePrivateMessage(client *types.Client, message types.MasterObj, rawmsg []byte) bool {
+	// Handle 1to1 messaging.
+
+	/* TODO handle server side message logging. handle an error
+	 * message for non-existing users (requires user database)
+	 * and a separate one for users not being logged on. */
+
+	relayed := false
+	for k, c := range clients {
+		if message.To == k {
+			c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
+			relayed = true
+		}
+	}
+
+	if relayed {
+		return true
+	}
+
+	if err := client.Error(jgordon.NotFound, ""); err != nil {
+		logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotFound))
+	}
+
+	return false
+}
+
+func handleRoomMessage(client *types.Client, message types.MasterObj, rawmsg []byte) bool {
+	if !strings.Contains(message.To, "/") {
+		str := "room names should be type of 'group/room'"
+		if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
+			logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
+		}
+		return false
+	}
+	slice := strings.Split(message.To, "/")
+	group := GetGroup(slice[0])
+	if group == nil {
+		str := "group does not exist"
+		if err := client.Error(jgordon.NotFound, str); err != nil {
+			logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.NotFound, str))
+		}
+		return false
+	}
+
+	// Block guest connections from messaging outside of group #default.
+	if client.User.Type == "guest" && group.Title != "#default" {
+		str := "guest account, please authenticate"
+		if err := client.Error(jgordon.Forbidden, str); err != nil {
+			logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.Forbidden, str))
+		}
+		return false
+	}
+
+	// Block messages from outside a group.
+	var member = false
+	for _, g := range client.User.Groups {
+		if group.Title == g {
+			member = true
+		}
+	}
+
+	if !member {
+		if err := client.Error(jgordon.Forbidden, ""); err != nil {
+			logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.Forbidden))
+		}
+		client.RaiseBan(1)
+		return false
+	}
+
+	room, err := GetRoom(slice[0], slice[1])
+	if err != nil {
+		logger.Error(errors.Wrapf(err, "GetRoom %s/%s", slice[0], slice[1]))
+	}
+
+	if room == nil {
+		if err := client.Error(jgordon.NotFound, ""); err != nil {
+			logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotFound))
+		}
+		return false
+	}
+
+	// Block external messages on private rooms.
+	member = false
+	for k := range room.Users {
+		if client.User.ID.String() == k {
+			member = true
+		}
+	}
+
+	if room.Private && !member {
+		if err := client.Error(jgordon.Forbidden, ""); err != nil {
+			log.Fatalln(errors.Wrapf(err, "client.Error %s", jgordon.Forbidden))
+		}
+		client.RaiseBan(1)
+		return false
+	}
+
+	relayToRoom(room, rawmsg)
+	return true
+}
+
 // Main functionality of ParseMessage
 func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) {
 	switch {
@@ -42,109 +143,20 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 		 * not currently online (with databasing enabled, otherwise should
 		 * return an error)); if destination doesn't exist return an error. */
 
+		sent := false
 		switch {
 		// All room's start with "#"
 		case IsRoomName(message.To):
-			if !strings.Contains(message.To, "/") {
-				str := "room names should be type of 'group/room'"
-				if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
-					logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
-				}
-				return
-			}
-			slice := strings.Split(message.To, "/")
-			group := GetGroup(slice[0])
-			if group == nil {
-				str := "group does not exist"
-				if err := client.Error(jgordon.NotFound, str); err != nil {
-					logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.NotFound, str))
-				}
-				return
-			}
-
-			// Block guest connections from messaging outside of group #default.
-			if client.User.Type == "guest" && group.Title != "#default" {
-				str := "guest account, please authenticate"
-				if err := client.Error(jgordon.Forbidden, str); err != nil {
-					logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.Forbidden, str))
-				}
-				return
-			}
-
-			// Block messages from outside a group.
-			var member = false
-			for _, g := range client.User.Groups {
-				if group.Title == g {
-					member = true
-				}
-			}
-
-			if !member {
-				if err := client.Error(jgordon.Forbidden, ""); err != nil {
-					logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.Forbidden))
-				}
-				client.RaiseBan(1)
-				return
-			}
-
-			room, err := GetRoom(slice[0], slice[1])
-			if err != nil {
-				logger.Error(errors.Wrapf(err, "GetRoom %s/%s", slice[0], slice[1]))
-			}
-
-			if room == nil {
-				if err := client.Error(jgordon.NotFound, ""); err != nil {
-					logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotFound))
-				}
-				return
-			}
-
-			// Block external messages on private rooms.
-			member = false
-			for k := range room.Users {
-				if client.User.ID.String() == k {
-					member = true
-				}
-			}
-
-			if room.Private && !member {
-				if err := client.Error(jgordon.Forbidden, ""); err != nil {
-					log.Fatalln(errors.Wrapf(err, "client.Error %s", jgordon.Forbidden))
-				}
-				client.RaiseBan(1)
-				return
-			}
-			go relayToRoom(room, rawmsg)
-			break
+			sent = handleRoomMessage(client, message, rawmsg)
 		default:
-			// Handle 1to1 messaging.
-
-			/* TODO handle server side message logging. handle an error
-			 * message for non-existing users (requires user database)
-			 * and a separate one for users not being logged on. */
-
-			var relayed = false
-			for k, c := range clients {
-				if message.To == k {
-					c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
-					relayed = true
-				}
-			}
-
-			if relayed {
-				break
-			}
-
-			if err := client.Error(jgordon.NotFound, ""); err != nil {
-				logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotFound))
-			}
-
-			return
+			sent = handlePrivateMessage(client, message, rawmsg)
 		}
 
 		// Send a response back saying the message was sent.
-		if err := client.Alert(jgordon.OK, ""); err != nil {
-			logger.Error(errors.Wrapf(err, "client.Alert %s", jgordon.OK))
+		if sent {
+			if err := client.Alert(jgordon.OK, ""); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Alert %s", jgordon.OK))
+			}
 		}
 
 		break

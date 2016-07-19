@@ -17,6 +17,7 @@ var (
 	clients = make(map[string]*types.Client)
 )
 
+// This internal function is used in message.go
 func authenticate(client *types.Client, token types.AuthToken) {
 	keys, err := db.GetKeySet("user-*-" + token.AccountName + "-*")
 	if err != nil {
@@ -24,7 +25,7 @@ func authenticate(client *types.Client, token types.AuthToken) {
 	}
 
 	if len(keys) == 0 {
-		if err := client.Error(jgordon.IncorrectCredentials, ""); err != nil {
+		if err = client.Error(jgordon.IncorrectCredentials, ""); err != nil {
 			logger.Error(errors.Wrap(err, "client.Error"))
 		}
 
