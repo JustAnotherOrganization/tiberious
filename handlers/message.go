@@ -13,15 +13,19 @@ import (
 
 func relayToRoom(room *types.Room, rawmsg []byte) {
 	for _, u := range room.Users {
-		c := GetClientForUser(u)
-		c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
+		c := GetClientForUser(u) // In clienthandler.go
+		if c != nil {
+			c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
+		}
 	}
 }
 
 func relayToGroup(group *types.Group, rawmsg []byte) {
 	for _, u := range group.Users {
-		c := GetClientForUser(u)
-		c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
+		c := GetClientForUser(u) // In clienthandler.go
+		if c != nil {
+			c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
+		}
 	}
 }
 
@@ -79,7 +83,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			}
 
 			// Block guest connections from messaging outside of group #default.
-			if client.User.Type == "guest" {
+			if client.User.Type == "guest" && group.Title != "#default" {
 				if err := client.Error(types.Forbidden, "guest account, please authenticate"); err != nil {
 					logger.Error(err)
 				}
@@ -173,6 +177,12 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			return 0
 		}
 		slice := strings.Split(message.Room, "/")
+		if len(slice) != 2 {
+			if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
+				logger.Error(err)
+			}
+			return 0
+		}
 		group := GetGroup(slice[0])
 		if group == nil {
 			if err := client.Error(types.NotFound, "group does not exist"); err != nil {
@@ -182,7 +192,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		}
 
 		// Block guest connections from messaging outside of group #default.
-		if client.User.Type == "guest" && group.Title == "default" {
+		if client.User.Type == "guest" && group.Title != "#default" {
 			if err := client.Error(types.Forbidden, "guest account, please authenticate"); err != nil {
 				logger.Error(err)
 			}
@@ -205,13 +215,12 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		}
 
 		// TODO implement private rooms
-		var room *types.Room
-		room = GetRoom(slice[0], slice[1])
+		room := GetRoom(slice[0], slice[1])
 		if room == nil {
 			room = GetNewRoom(slice[0], slice[1])
+			room.Users = make(map[string]*types.User)
 		}
 
-		room.Users = make(map[string]*types.User)
 		room.Users[client.User.ID.String()] = client.User
 
 		// Update the room data for the database.

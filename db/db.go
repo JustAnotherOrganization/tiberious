@@ -190,9 +190,13 @@ func GetUserData(id string) (*types.User, error) {
 	case config.UserDatabase == 0:
 		user := new(types.User)
 
-		keys, err := GetKeySet("user-*-*" + id)
+		keys, err := GetKeySet("user-*-*-" + id)
 		if err != nil {
 			return nil, err
+		}
+
+		if len(keys) == 0 {
+			return nil, nil
 		}
 
 		info, err := rdis.HGetAllMap(keys[0]).Result()
@@ -256,6 +260,7 @@ func GetRoomData(gname, rname string) (*types.Room, error) {
 			return nil, err
 		}
 
+		room.Users = make(map[string]*types.User)
 		if len(users) > 0 {
 			for _, v := range users {
 				u, err := GetUserData(v)
