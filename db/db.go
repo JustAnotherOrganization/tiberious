@@ -282,7 +282,9 @@ func GetRoomData(gname, rname string) (*types.Room, error) {
 				if err != nil {
 					return nil, errors.Wrapf(err, "GetUserData %s", v)
 				}
-				room.Users[u.ID.String()] = u
+				if u != nil {
+					room.Users[u.ID.String()] = u
+				}
 			}
 		}
 
