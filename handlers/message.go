@@ -31,35 +31,8 @@ func relayToGroup(group *types.Group, rawmsg []byte) {
 	}
 }
 
-/*ParseMessage parses a message object and returns an int back, with a ban-score
- *if this is greater than 0 it is applied to the clients ban-score. */
-func ParseMessage(client *types.Client, rawmsg []byte) int {
-	var message types.MasterObj
-	if err := json.Unmarshal(rawmsg, &message); err != nil {
-		str := "invalid object"
-		if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
-			logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
-		}
-		return 0
-	}
-
-	if message.Time <= 0 {
-		str := "missing or invalid time"
-		if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
-			logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
-		}
-		return 0
-	}
-
-	if !config.AllowGuests && !client.Authorized {
-		if message.Action != "authenticate" {
-			if err := client.Error(jgordon.NotAuthorized, ""); err != nil {
-				logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotAuthorized))
-			}
-			return 1
-		}
-	}
-
+// Main functionality of ParseMessage
+func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) int {
 	switch {
 	case message.Action == "authenticate":
 		return authenticate(client, message.User)
@@ -328,4 +301,36 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 	}
 
 	return 0
+}
+
+/*ParseMessage parses a message object and returns an int back, with a ban-score
+ *if this is greater than 0 it is applied to the clients ban-score. */
+func ParseMessage(client *types.Client, rawmsg []byte) int {
+	var message types.MasterObj
+	if err := json.Unmarshal(rawmsg, &message); err != nil {
+		str := "invalid object"
+		if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
+			logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
+		}
+		return 0
+	}
+
+	if message.Time <= 0 {
+		str := "missing or invalid time"
+		if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
+			logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
+		}
+		return 0
+	}
+
+	if !config.AllowGuests && !client.Authorized {
+		if message.Action != "authenticate" {
+			if err := client.Error(jgordon.NotAuthorized, ""); err != nil {
+				logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotAuthorized))
+			}
+			return 1
+		}
+	}
+
+	return parseMessage(client, message, rawmsg)
 }
