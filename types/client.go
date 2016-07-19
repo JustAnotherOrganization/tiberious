@@ -14,7 +14,7 @@ type Client struct {
 	// Store a user object for each client.
 	User       *User
 	Authorized bool
-	BanScore   int
+	banScore   int
 }
 
 // NewClient returns a Client
@@ -44,4 +44,14 @@ func (c Client) Error(code int32, message string) error {
 
 	c.Conn.WriteMessage(websocket.BinaryMessage, ret)
 	return nil
+}
+
+// RaiseBan raises the clients banScore by i.
+func (c Client) RaiseBan(i int) {
+	c.banScore = c.banScore + i
+}
+
+// BanScore returns the clients current banScore
+func (c Client) BanScore() int {
+	return c.banScore
 }

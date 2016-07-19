@@ -17,7 +17,7 @@ var (
 	clients = make(map[string]*types.Client)
 )
 
-func authenticate(client *types.Client, token types.AuthToken) int {
+func authenticate(client *types.Client, token types.AuthToken) {
 	keys, err := db.GetKeySet("user-*-" + token.AccountName + "-*")
 	if err != nil {
 		logger.Error(errors.Wrapf(err, "db.GetKeySet %s", token.AccountName))
@@ -28,7 +28,8 @@ func authenticate(client *types.Client, token types.AuthToken) int {
 			logger.Error(errors.Wrap(err, "client.Error"))
 		}
 
-		return 1
+		client.RaiseBan(1)
+		return
 	}
 
 	slice := strings.Split(keys[0], "-")
@@ -48,7 +49,8 @@ func authenticate(client *types.Client, token types.AuthToken) int {
 			logger.Error(errors.Wrap(err, "client.Error"))
 		}
 
-		return 1
+		client.RaiseBan(1)
+		return
 	}
 
 	if client.User.Type == "guest" {
@@ -73,8 +75,6 @@ func authenticate(client *types.Client, token types.AuthToken) int {
 	if err := client.Alert(jgordon.OK, ""); err != nil {
 		logger.Error(errors.Wrap(err, "client.Alert"))
 	}
-
-	return 0
 }
 
 /* Always make sure a new ID is unique...
@@ -187,10 +187,8 @@ func ClientHandler(conn *websocket.Conn) {
 			break
 		}
 
-		if ban := ParseMessage(client, rawmsg); ban > 0 {
-			// TODO handle ban-score
-			break
-		}
+		go ParseMessage(client, rawmsg)
+		// TODO handle ban-score
 	}
 
 	// We broke out of the loop so disconnect the client.

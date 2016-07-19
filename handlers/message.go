@@ -32,10 +32,11 @@ func relayToGroup(group *types.Group, rawmsg []byte) {
 }
 
 // Main functionality of ParseMessage
-func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) int {
+func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) {
 	switch {
 	case message.Action == "authenticate":
-		return authenticate(client, message.User)
+		authenticate(client, message.User) // in clienthandler.go
+		return
 	case message.Action == "msg":
 		/* TODO Fixup message parsing (should work for 1to1 even if the user is
 		 * not currently online (with databasing enabled, otherwise should
@@ -49,7 +50,7 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 				if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
 					logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 				}
-				return 0
+				return
 			}
 			slice := strings.Split(message.To, "/")
 			group := GetGroup(slice[0])
@@ -58,7 +59,7 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 				if err := client.Error(jgordon.NotFound, str); err != nil {
 					logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.NotFound, str))
 				}
-				return 0
+				return
 			}
 
 			// Block guest connections from messaging outside of group #default.
@@ -67,7 +68,7 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 				if err := client.Error(jgordon.Forbidden, str); err != nil {
 					logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.Forbidden, str))
 				}
-				return 0
+				return
 			}
 
 			// Block messages from outside a group.
@@ -82,7 +83,8 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 				if err := client.Error(jgordon.Forbidden, ""); err != nil {
 					logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.Forbidden))
 				}
-				return 1
+				client.RaiseBan(1)
+				return
 			}
 
 			room, err := GetRoom(slice[0], slice[1])
@@ -94,7 +96,7 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 				if err := client.Error(jgordon.NotFound, ""); err != nil {
 					logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotFound))
 				}
-				return 0
+				return
 			}
 
 			// Block external messages on private rooms.
@@ -109,7 +111,8 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 				if err := client.Error(jgordon.Forbidden, ""); err != nil {
 					log.Fatalln(errors.Wrapf(err, "client.Error %s", jgordon.Forbidden))
 				}
-				return 1
+				client.RaiseBan(1)
+				return
 			}
 			go relayToRoom(room, rawmsg)
 			break
@@ -136,7 +139,7 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 				logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotFound))
 			}
 
-			return 0
+			return
 		}
 
 		// Send a response back saying the message was sent.
@@ -152,7 +155,7 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 			if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
 				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 			}
-			return 0
+			return
 		}
 
 		if !strings.Contains(message.Room, "/") {
@@ -160,7 +163,7 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 			if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
 				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 			}
-			return 0
+			return
 		}
 		slice := strings.Split(message.Room, "/")
 		if len(slice) != 2 {
@@ -168,7 +171,7 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 			if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
 				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 			}
-			return 0
+			return
 		}
 		group := GetGroup(slice[0])
 		if group == nil {
@@ -176,7 +179,7 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 			if err := client.Error(jgordon.NotFound, str); err != nil {
 				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.NotFound, str))
 			}
-			return 0
+			return
 		}
 
 		// Block guest connections from messaging outside of group #default.
@@ -185,7 +188,7 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 			if err := client.Error(jgordon.Forbidden, str); err != nil {
 				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.Forbidden, str))
 			}
-			return 0
+			return
 		}
 
 		// Block users from joining if they're outside the group.
@@ -200,7 +203,8 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 			if err := client.Error(jgordon.Forbidden, ""); err != nil {
 				logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.Forbidden))
 			}
-			return 1
+			client.RaiseBan(1)
+			return
 		}
 
 		// Use GetNewRoom cause it will just grab the existing one if it does
@@ -209,7 +213,7 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 		room, err := GetNewRoom(slice[0], slice[1])
 		if err != nil {
 			logger.Error(errors.Wrapf(err, "GetNewRoom %s/%s", slice[0], slice[1]))
-			return 0
+			return
 		}
 
 		room.Users[client.User.ID.String()] = client.User
@@ -232,7 +236,7 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 			if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
 				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject))
 			}
-			return 0
+			return
 		}
 
 		if !strings.Contains(message.Room, "/") {
@@ -240,7 +244,7 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 			if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
 				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 			}
-			return 0
+			return
 		}
 		slice := strings.Split(message.Room, "/")
 		group := GetGroup(slice[0])
@@ -249,13 +253,13 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 			if err := client.Error(jgordon.NotFound, str); err != nil {
 				logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.NotFound, str))
 			}
-			return 0
+			return
 		}
 
 		room, err := GetRoom(slice[0], slice[1])
 		if err != nil {
 			logger.Error(errors.Wrapf(err, "GetRoom %s/%s", slice[0], slice[1]))
-			return 0
+			return
 		}
 		if room == nil {
 			if err := client.Error(jgordon.NotFound, ""); err != nil {
@@ -300,19 +304,19 @@ func parseMessage(client *types.Client, message types.MasterObj, rawmsg []byte) 
 		break
 	}
 
-	return 0
+	return
 }
 
-/*ParseMessage parses a message object and returns an int back, with a ban-score
- *if this is greater than 0 it is applied to the clients ban-score. */
-func ParseMessage(client *types.Client, rawmsg []byte) int {
+// ParseMessage parses a message object and if neccessary raises the client's
+// banScore.
+func ParseMessage(client *types.Client, rawmsg []byte) {
 	var message types.MasterObj
 	if err := json.Unmarshal(rawmsg, &message); err != nil {
 		str := "invalid object"
 		if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
 			logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 		}
-		return 0
+		return
 	}
 
 	if message.Time <= 0 {
@@ -320,7 +324,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		if err := client.Error(jgordon.BadRequestOrObject, str); err != nil {
 			logger.Error(errors.Wrapf(err, "client.Error %s : %s", jgordon.BadRequestOrObject, str))
 		}
-		return 0
+		return
 	}
 
 	if !config.AllowGuests && !client.Authorized {
@@ -328,9 +332,10 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			if err := client.Error(jgordon.NotAuthorized, ""); err != nil {
 				logger.Error(errors.Wrapf(err, "client.Error %s", jgordon.NotAuthorized))
 			}
-			return 1
+			client.RaiseBan(1)
+			return
 		}
 	}
 
-	return parseMessage(client, message, rawmsg)
+	parseMessage(client, message, rawmsg)
 }
