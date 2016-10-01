@@ -1,36 +1,62 @@
 package db
 
 import (
-	"log"
 	"strings"
+	"tiberious/logger"
 	"tiberious/settings"
 	"tiberious/types"
+
+	"github.com/pkg/errors"
 )
 
-var (
-	config settings.Config
-	rdis   rdisClient
+type (
+	// Client provides access to the database
+	Client interface {
+		GetKeySet(search string) ([]string, error)
+		WriteUserData(user *types.User) error
+		WriteRoomData(room *types.Room) error
+		WriteGroupData(group *types.Group) error
+		UserExists(id string) (bool, error)
+		RoomExists(gname, rname string) (bool, error)
+		GroupExists(gname string) (bool, error)
+		GetUserData(id string) (*types.User, error)
+		GetRoomData(gname, rname string) (*types.Room, error)
+		GetGroupData(gname string) (*types.Group, error)
+		DeleteUser(user *types.User) error
+	}
+
+	dbClient struct {
+		config settings.Config
+
+		rdis rdisClient
+	}
 )
 
-func init() {
-	config = settings.GetConfig()
+// NewDB returns a new database client
+func NewDB(c settings.Config) (Client, error) {
+	client := &dbClient{
+		config: c,
+	}
 
-	if config.UserDatabase == 0 {
+	if client.config.UserDatabase == 0 {
 		// Load Redis DB
 		var err error
-		rdis, err = newRedisClient()
+		client.rdis, err = client.newRedisClient()
 		if err != nil {
-			log.Fatalln("Unable to connect to redis database:", err)
+			return client, errors.Wrap(err, "newRedisClient")
 		}
-		log.Println("User database started on redis db", config.RedisUser)
+
+		logger.Info("User database started on redis db", client.config.RedisUser)
 	}
+
+	return client, nil
 }
 
 // GetKeySet returns all the keys that match a given search pattern.
-func GetKeySet(search string) ([]string, error) {
+func (db *dbClient) GetKeySet(search string) ([]string, error) {
 	switch {
-	case config.UserDatabase == 0:
-		return rdis.getKeySet(search)
+	case db.config.UserDatabase == 0:
+		return db.rdis.getKeySet(search)
 	default:
 		break
 	}
@@ -39,37 +65,41 @@ func GetKeySet(search string) ([]string, error) {
 }
 
 // WriteUserData writes a given user object to the current database.
-func WriteUserData(user *types.User) error {
+func (db *dbClient) WriteUserData(user *types.User) error {
 	switch {
-	case config.UserDatabase == 0:
-		return rdis.writeUserData(user)
+	case db.config.UserDatabase == 0:
+		return db.rdis.writeUserData(user)
 	default:
+		// TODO determine if this should be a fatal error, it should never happen
+		logger.Info("Invalid config, no user data written")
 		break
 	}
 
-	// TODO log this, it should not occur
 	return nil
 }
 
 // WriteRoomData writes a given room object to the current database.
-func WriteRoomData(room *types.Room) error {
+func (db *dbClient) WriteRoomData(room *types.Room) error {
 	switch {
-	case config.UserDatabase == 0:
-		return rdis.writeRoomData(room)
+	case db.config.UserDatabase == 0:
+		return db.rdis.writeRoomData(room)
 	default:
+		// TODO determine if this should be a fatal error, it should never happen
+		logger.Info("Invalid config, no room data written")
 		break
 	}
 
-	// TODO log this, it should not occur
 	return nil
 }
 
 // WriteGroupData writes a given group object to the current database.
-func WriteGroupData(group *types.Group) error {
+func (db *dbClient) WriteGroupData(group *types.Group) error {
 	switch {
-	case config.UserDatabase == 0:
-		return rdis.writeGroupData(group)
+	case db.config.UserDatabase == 0:
+		return db.rdis.writeGroupData(group)
 	default:
+		// TODO determine if this should be a fatal error, it should never happen
+		logger.Info("Invalid config, no group data written")
 		break
 	}
 
@@ -77,10 +107,10 @@ func WriteGroupData(group *types.Group) error {
 }
 
 // UserExists returns whether a user exists in the database.
-func UserExists(id string) (bool, error) {
-	res, err := GetKeySet("user-*-*-" + id)
+func (db *dbClient) UserExists(id string) (bool, error) {
+	res, err := db.GetKeySet("user-*-*-" + id)
 	if err != nil {
-		return false, nil
+		return false, errors.Wrap(err, "GetKeySet")
 	}
 
 	if len(res) == 0 {
@@ -91,10 +121,10 @@ func UserExists(id string) (bool, error) {
 }
 
 // RoomExists returns whether a room exists in the database.
-func RoomExists(gname, rname string) (bool, error) {
-	res, err := GetKeySet("room-" + gname + "-" + rname + "*")
+func (db *dbClient) RoomExists(gname, rname string) (bool, error) {
+	res, err := db.GetKeySet("room-" + gname + "-" + rname + "*")
 	if err != nil {
-		return false, err
+		return false, errors.Wrap(err, "GetKeySet")
 	}
 
 	if len(res) == 0 {
@@ -105,10 +135,10 @@ func RoomExists(gname, rname string) (bool, error) {
 }
 
 // GroupExists returns whether a group exists in the database.
-func GroupExists(gname string) (bool, error) {
-	res, err := GetKeySet("group-" + gname + "-*")
+func (db *dbClient) GroupExists(gname string) (bool, error) {
+	res, err := db.GetKeySet("group-" + gname + "-*")
 	if err != nil {
-		return false, err
+		return false, errors.Wrap(err, "GetKeySet")
 	}
 
 	if len(res) == 0 {
@@ -119,10 +149,10 @@ func GroupExists(gname string) (bool, error) {
 }
 
 // GetUserData gets all the data for a given user ID from the database
-func GetUserData(id string) (*types.User, error) {
+func (db *dbClient) GetUserData(id string) (*types.User, error) {
 	switch {
-	case config.UserDatabase == 0:
-		return rdis.getUserData(id)
+	case db.config.UserDatabase == 0:
+		return db.rdis.getUserData(id)
 	default:
 		break
 	}
@@ -131,10 +161,10 @@ func GetUserData(id string) (*types.User, error) {
 }
 
 // GetRoomData gets all the data for a given room (group required) from the database
-func GetRoomData(gname, rname string) (*types.Room, error) {
+func (db *dbClient) GetRoomData(gname, rname string) (*types.Room, error) {
 	switch {
-	case config.UserDatabase == 0:
-		return rdis.getRoomData(gname, rname)
+	case db.config.UserDatabase == 0:
+		return db.rdis.getRoomData(gname, rname)
 	default:
 		break
 	}
@@ -143,10 +173,10 @@ func GetRoomData(gname, rname string) (*types.Room, error) {
 }
 
 // GetGroupData gets all the data for a given group from the database
-func GetGroupData(gname string) (*types.Group, error) {
+func (db *dbClient) GetGroupData(gname string) (*types.Group, error) {
 	switch {
-	case config.UserDatabase == 0:
-		return rdis.getGroupData(gname)
+	case db.config.UserDatabase == 0:
+		return db.rdis.getGroupData(gname)
 	default:
 		break
 	}
@@ -156,36 +186,38 @@ func GetGroupData(gname string) (*types.Group, error) {
 
 // DeleteUser removes a user from all rooms and groups and deletes it from the
 // database (use sparingly). */
-func DeleteUser(user *types.User) error {
+func (db *dbClient) DeleteUser(user *types.User) error {
 	for _, gname := range user.Groups {
-		group, err := GetGroupData(gname)
+		group, err := db.GetGroupData(gname)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "GetGroupData")
 		}
 
 		delete(group.Users, user.ID.String())
-		if err := WriteGroupData(group); err != nil {
-			return err
+		if err := db.WriteGroupData(group); err != nil {
+			return errors.Wrap(err, "WriteGroupData")
 		}
 	}
 
 	for _, rname := range user.Rooms {
 		slice := strings.Split(rname, "/")
-		room, err := GetRoomData(slice[0], slice[1])
+		room, err := db.GetRoomData(slice[0], slice[1])
 		if err != nil {
-			return err
+			return errors.Wrap(err, "GetRoomData")
 		}
 
 		delete(room.Users, user.ID.String())
-		if err := WriteRoomData(room); err != nil {
-			return err
+		if err := db.WriteRoomData(room); err != nil {
+			return errors.Wrap(err, "WriteRoomData")
 		}
 	}
 
 	switch {
-	case config.UserDatabase == 0:
-		return rdis.deleteUser(user)
+	case db.config.UserDatabase == 0:
+		return db.rdis.deleteUser(user)
 	default:
+		// TODO determine if this should be a fatal error, it should never happen
+		logger.Info("Invalid config, user not deleted")
 		break
 	}
 

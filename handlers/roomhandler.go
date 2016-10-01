@@ -3,19 +3,15 @@ package handlers
 import (
 	"log"
 	"strings"
-	"tiberious/db"
 	"tiberious/logger"
-	"tiberious/settings"
 	"tiberious/types"
 )
 
 var (
 	defgroup *types.Group
-	config   settings.Config
 )
 
 func init() {
-	config = settings.GetConfig()
 	defgroup = GetNewGroup("#default")
 	/* We can't get a room from the default group without first writing the
 	 * group data (on first start). */
@@ -31,7 +27,7 @@ func init() {
 
 // GetGroup check if a group exists and if so return it
 func GetGroup(gname string) *types.Group {
-	gexists, err := db.GroupExists(gname)
+	gexists, err := dbClient.GroupExists(gname)
 	if err != nil {
 		logger.Error(err)
 	}
@@ -39,7 +35,7 @@ func GetGroup(gname string) *types.Group {
 		return nil
 	}
 
-	group, err := db.GetGroupData(gname)
+	group, err := dbClient.GetGroupData(gname)
 	if err != nil {
 		logger.Error(err)
 	}
@@ -58,7 +54,7 @@ func GetNewGroup(gname string) *types.Group {
 
 // WriteGroupData writes the given group object to the current database.
 func WriteGroupData(group *types.Group) error {
-	return db.WriteGroupData(group)
+	return dbClient.WriteGroupData(group)
 }
 
 // GetRoom check if a room exists (requires group) and if so return it
@@ -68,7 +64,7 @@ func GetRoom(gname, rname string) *types.Room {
 		return nil
 	}
 
-	rexists, err := db.RoomExists(gname, rname)
+	rexists, err := dbClient.RoomExists(gname, rname)
 	if err != nil {
 		logger.Error(err)
 	}
@@ -77,7 +73,7 @@ func GetRoom(gname, rname string) *types.Room {
 		return nil
 	}
 
-	room, err := db.GetRoomData(gname, rname)
+	room, err := dbClient.GetRoomData(gname, rname)
 	if err != nil {
 		logger.Error(err)
 	}
@@ -108,7 +104,7 @@ func GetNewRoom(gname, rname string) *types.Room {
 
 // WriteRoomData writes the given room object to the current database.
 func WriteRoomData(room *types.Room) error {
-	return db.WriteRoomData(room)
+	return dbClient.WriteRoomData(room)
 }
 
 // IsRoomName returns whether a string starts with "#"

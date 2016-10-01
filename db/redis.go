@@ -1,11 +1,11 @@
 package db
 
 import (
-	"log"
 	"tiberious/logger"
 	"tiberious/types"
 
 	"github.com/pborman/uuid"
+	"github.com/pkg/errors"
 
 	"gopkg.in/redis.v3"
 )
@@ -25,6 +25,10 @@ Data map:
 		Room List: "group-"+<group name>+"-rooms" (set)
 */
 
+var (
+	errMissingRedisHost = errors.New("Missing redishost in config file")
+)
+
 type (
 	rdisClient interface {
 		updateSet(key string, new []string)
@@ -43,26 +47,30 @@ type (
 	}
 )
 
-func newRedisClient() (rdisClient, error) {
-	if config.RedisHost == "" {
-		log.Fatalln("Missing redishost in config file")
+func (db *dbClient) newRedisClient() (rdisClient, error) {
+	if db.config.RedisHost == "" {
+		return nil, errMissingRedisHost
 	}
 
-	if config.RedisPass == "" {
-		log.Println("Insecure redis database is not recommended")
+	if db.config.RedisPass == "" {
+		logger.Info("Insecure redis database is not recommended")
 	}
 
 	r := &rClient{}
 	r.Client = redis.NewClient(&redis.Options{
 		//r.Client = redis.NewClient(&redis.Options{
-		Addr:     config.RedisHost,
-		Password: config.RedisPass,
-		DB:       config.RedisUser,
+		Addr:     db.config.RedisHost,
+		Password: db.config.RedisPass,
+		DB:       db.config.RedisUser,
 	})
 
 	// Confirm we can communicate with the redis instance.
 	_, err := r.Ping().Result()
-	return r, err
+	if err != nil {
+		return nil, errors.Wrap(err, "r.Pint().Result")
+	}
+
+	return r, nil
 }
 
 // Stupid helper function because redis only handles strings.
@@ -137,7 +145,7 @@ func (r *rClient) writeUserData(user *types.User) error {
 		"salt", user.Salt,
 		"connected", strbool(user.Connected),
 	).Err(); err != nil {
-		return err
+		return errors.Wrap(err, "r.Client.HMSet")
 	}
 
 	go r.updateSet("user-"+user.Type+"-"+user.ID.String()+"-rooms", user.Rooms)
@@ -148,7 +156,7 @@ func (r *rClient) writeUserData(user *types.User) error {
 
 func (r *rClient) writeRoomData(room *types.Room) error {
 	if err := r.Client.HMSet("room-"+room.Group+"-"+room.Title+"-info", "title", room.Title, "group", room.Group, "private", strbool(room.Private)).Err(); err != nil {
-		return err
+		return errors.Wrap(err, "r.Client.HMSet")
 	}
 
 	var slice []string
@@ -163,7 +171,7 @@ func (r *rClient) writeRoomData(room *types.Room) error {
 
 func (r *rClient) writeGroupData(group *types.Group) error {
 	if err := r.Client.HSet("group-"+group.Title+"-info", "title", group.Title).Err(); err != nil {
-		return err
+		return errors.Wrap(err, "r.Client.HMSet")
 	}
 
 	var slice []string
@@ -183,9 +191,9 @@ func (r *rClient) writeGroupData(group *types.Group) error {
 }
 
 func (r *rClient) getUserData(id string) (*types.User, error) {
-	keys, err := GetKeySet("user-*-*-" + id)
+	keys, err := r.getKeySet("user-*-*-" + id)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "r.getKeySet")
 	}
 
 	if len(keys) == 0 {
@@ -194,7 +202,7 @@ func (r *rClient) getUserData(id string) (*types.User, error) {
 
 	info, err := r.Client.HGetAllMap(keys[0]).Result()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "r.Client.HGetAllMap")
 	}
 
 	user := &types.User{
@@ -210,7 +218,7 @@ func (r *rClient) getUserData(id string) (*types.User, error) {
 
 	rooms, err := r.Client.SMembers("user-" + user.Type + "-" + user.ID.String() + "-rooms").Result()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "r.Client.SMembers")
 	}
 
 	if len(rooms) > 0 {
@@ -219,7 +227,7 @@ func (r *rClient) getUserData(id string) (*types.User, error) {
 
 	groups, err := r.Client.SMembers("user-" + user.Type + "-" + user.ID.String() + "-groups").Result()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "r.Client.SMembers")
 	}
 
 	if len(groups) > 0 {
@@ -232,7 +240,7 @@ func (r *rClient) getUserData(id string) (*types.User, error) {
 func (r *rClient) getRoomData(gname, rname string) (*types.Room, error) {
 	info, err := r.Client.HGetAllMap("room-" + gname + "-" + rname + "-info").Result()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "r.Client.HGetAllMap")
 	}
 
 	room := &types.Room{
@@ -243,7 +251,7 @@ func (r *rClient) getRoomData(gname, rname string) (*types.Room, error) {
 
 	users, err := r.Client.SMembers("room-" + gname + "-" + rname + "-list").Result()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "r.Client.SMembers")
 	}
 
 	room.Users = make(map[string]*types.User)
@@ -251,7 +259,7 @@ func (r *rClient) getRoomData(gname, rname string) (*types.Room, error) {
 		for _, v := range users {
 			u, err := r.getUserData(v)
 			if err != nil {
-				return nil, err
+				return nil, errors.Wrap(err, "r.getUserData")
 			}
 			room.Users[u.ID.String()] = u
 		}
@@ -269,7 +277,7 @@ func (r *rClient) getGroupData(gname string) (*types.Group, error) {
 
 	users, err := r.Client.SMembers("group-" + gname + "-users").Result()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "r.Client.SMembers")
 	}
 
 	if len(users) > 0 {
@@ -278,9 +286,10 @@ func (r *rClient) getGroupData(gname string) (*types.Group, error) {
 			 * the actual number of entries so confirm it's not nil before
 			 * attempting to run GetUserData with the given string. */
 			if v != "" {
-				u, stat := r.getUserData(v)
-				if stat != nil {
-					return nil, stat
+				var u *types.User
+				u, err = r.getUserData(v)
+				if err != nil {
+					return nil, errors.Wrap(err, "r.getUserData")
 				}
 				group.Users[u.ID.String()] = u
 			}
@@ -289,7 +298,7 @@ func (r *rClient) getGroupData(gname string) (*types.Group, error) {
 
 	rooms, err := r.Client.SMembers("group-" + gname + "-rooms").Result()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "r.Client.SMembers")
 	}
 
 	if len(rooms) > 0 {
@@ -297,7 +306,7 @@ func (r *rClient) getGroupData(gname string) (*types.Group, error) {
 			if v != "" {
 				r, err := r.getRoomData(gname, v)
 				if err != nil {
-					return nil, err
+					return nil, errors.Wrap(err, "r.getRoomData")
 				}
 				group.Rooms[r.Title] = r
 			}
@@ -309,10 +318,14 @@ func (r *rClient) getGroupData(gname string) (*types.Group, error) {
 
 func (r *rClient) deleteUser(user *types.User) error {
 	if err := r.Client.Del("user-" + user.Type + "-" + user.ID.String() + "-groups").Err(); err != nil {
-		return err
+		return errors.Wrap(err, "r.Client.Del")
 	}
 	if err := r.Client.Del("user-" + user.Type + "-" + user.ID.String() + "-rooms").Err(); err != nil {
-		return err
+		return errors.Wrap(err, "r.Client.Del")
 	}
-	return r.Client.Del("user-" + user.Type + "-" + user.LoginName + "-" + user.ID.String()).Err()
+	if err := r.Client.Del("user-" + user.Type + "-" + user.LoginName + "-" + user.ID.String()).Err(); err != nil {
+		return errors.Wrap(err, "r.Client.Del")
+	}
+
+	return nil
 }
