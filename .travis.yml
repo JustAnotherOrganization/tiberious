@@ -2,7 +2,7 @@ language: go
 cache: apt
 sudo: false
 go:
-- 1.5
+- 1.7
 install:
 - go get github.com/tools/godep
 - go install github.com/tools/godep
