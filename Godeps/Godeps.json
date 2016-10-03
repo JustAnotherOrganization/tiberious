@@ -1,7 +1,7 @@
 {
 	"ImportPath": "tiberious",
-	"GoVersion": "go1.6",
-	"GodepVersion": "v60",
+	"GoVersion": "go1.7",
+	"GodepVersion": "v74",
 	"Deps": [
 		{
 			"ImportPath": "github.com/gorilla/websocket",
@@ -11,6 +11,11 @@
 			"ImportPath": "github.com/pborman/uuid",
 			"Comment": "v1.0-11-gc55201b",
 			"Rev": "c55201b036063326c5b1b89ccfe45a184973d073"
+		},
+		{
+			"ImportPath": "github.com/pkg/errors",
+			"Comment": "v0.4.0",
+			"Rev": "d814416a46cbb066b728cfff58d30a986bc9ddbe"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/pbkdf2",
@@ -27,16 +32,6 @@
 		},
 		{
 			"ImportPath": "gopkg.in/redis.v3/internal/consistenthash",
-			"Comment": "v3.6.0",
-			"Rev": "d2ae7d870764d131887fa31a743bb50abbcf9384"
-		},
-		{
-			"ImportPath": "gopkg.in/redis.v3/internal/hashtag",
-			"Comment": "v3.6.0",
-			"Rev": "d2ae7d870764d131887fa31a743bb50abbcf9384"
-		},
-		{
-			"ImportPath": "gopkg.in/redis.v3/internal/pool",
 			"Comment": "v3.6.0",
 			"Rev": "d2ae7d870764d131887fa31a743bb50abbcf9384"
 		},

@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"log"
 	"strconv"
 	"strings"
 	"tiberious/db"
 	"tiberious/logger"
+	"tiberious/settings"
 	"tiberious/types"
 
 	"github.com/gorilla/websocket"
@@ -12,17 +14,30 @@ import (
 )
 
 var (
+	config   settings.Config
+	dbClient db.Client
+
 	clients = make(map[string]*types.Client)
 )
 
+func init() {
+	config = settings.GetConfig()
+
+	var err error
+	dbClient, err = db.NewDB(config)
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
 func authenticate(client *types.Client, token types.AuthToken) int {
-	keys, err := db.GetKeySet("user-*-" + token.AccountName + "-*")
+	keys, err := dbClient.GetKeySet("user-*-" + token.AccountName + "-*")
 	if err != nil {
 		logger.Error(err)
 	}
 
 	if len(keys) == 0 {
-		if err := client.Error(types.IncorrectCredentials, ""); err != nil {
+		if err = client.Error(types.IncorrectCredentials, ""); err != nil {
 			logger.Error(err)
 		}
 
@@ -30,10 +45,10 @@ func authenticate(client *types.Client, token types.AuthToken) int {
 	}
 
 	slice := strings.Split(keys[0], "-")
-	user, err := db.GetUserData(strings.Join(slice[3:], "-"))
+	user, err := dbClient.GetUserData(strings.Join(slice[3:], "-"))
 	if err != nil {
 		if err == types.NotInDB {
-			if err := client.Error(types.IncorrectCredentials, ""); err != nil {
+			if err = client.Error(types.IncorrectCredentials, ""); err != nil {
 				logger.Error(err)
 			}
 		} else {
@@ -50,7 +65,7 @@ func authenticate(client *types.Client, token types.AuthToken) int {
 	}
 
 	if client.User.Type == "guest" {
-		if err := db.DeleteUser(client.User); err != nil {
+		if err := dbClient.DeleteUser(client.User); err != nil {
 			logger.Error(err)
 		}
 	}
@@ -62,7 +77,7 @@ func authenticate(client *types.Client, token types.AuthToken) int {
 	client.User = user
 	client.Authorized = true
 	client.User.Connected = true
-	if err := db.WriteUserData(client.User); err != nil {
+	if err := dbClient.WriteUserData(client.User); err != nil {
 		logger.Error(err)
 	}
 
@@ -82,7 +97,7 @@ func getUniqueID() uuid.UUID {
 	var id uuid.UUID
 	for {
 		id = uuid.NewRandom()
-		exists, err := db.UserExists(id.String())
+		exists, err := dbClient.UserExists(id.String())
 		if err != nil {
 			logger.Error(err)
 		}
@@ -103,7 +118,7 @@ func ClientHandler(conn *websocket.Conn) {
 	// Set the UUID and initialize a username of "guest"
 	client.User.ID = getUniqueID()
 
-	guests, err := db.GetKeySet("user-guest-*-*")
+	guests, err := dbClient.GetKeySet("user-guest-*-*")
 	if err != nil {
 		logger.Error(err)
 	}
@@ -124,9 +139,9 @@ func ClientHandler(conn *websocket.Conn) {
 		client.User.Rooms = append(client.User.Rooms, "#default/#general")
 		room.Users[client.User.ID.String()] = client.User
 
-		db.WriteUserData(client.User)
-		db.WriteGroupData(defgroup)
-		db.WriteRoomData(room)
+		dbClient.WriteUserData(client.User)
+		dbClient.WriteGroupData(defgroup)
+		dbClient.WriteRoomData(room)
 
 		logger.Info("guest", client.User.ID.String(), "connected")
 	} else {
@@ -185,12 +200,12 @@ func ClientHandler(conn *websocket.Conn) {
 	client.Conn.Close()
 	if client.User != nil {
 		if client.User.Type == "guest" {
-			if err := db.DeleteUser(client.User); err != nil {
+			if err := dbClient.DeleteUser(client.User); err != nil {
 				logger.Error(err)
 			}
 		} else {
 			client.User.Connected = false
-			db.WriteUserData(client.User)
+			dbClient.WriteUserData(client.User)
 		}
 	}
 
