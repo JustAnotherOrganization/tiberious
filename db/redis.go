@@ -4,10 +4,10 @@ import (
 	"tiberious/logger"
 	"tiberious/types"
 
+	"gopkg.in/redis.v3"
+
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
-
-	"gopkg.in/redis.v3"
 )
 
 /*
@@ -26,7 +26,7 @@ Data map:
 */
 
 var (
-	errMissingRedisHost = errors.New("Missing redishost in config file")
+	errMissingDatabaseHost = errors.New("Missing DatabaseHost in config file")
 )
 
 type (
@@ -48,20 +48,20 @@ type (
 )
 
 func (db *dbClient) newRedisClient() (rdisClient, error) {
-	if db.config.RedisHost == "" {
-		return nil, errMissingRedisHost
+	if db.config.DatabaseAddress == "" {
+		return nil, errMissingDatabaseHost
 	}
 
-	if db.config.RedisPass == "" {
+	if db.config.DatabasePass == "" {
 		logger.Info("Insecure redis database is not recommended")
 	}
 
 	r := &rClient{}
 	r.Client = redis.NewClient(&redis.Options{
 		//r.Client = redis.NewClient(&redis.Options{
-		Addr:     db.config.RedisHost,
-		Password: db.config.RedisPass,
-		DB:       db.config.RedisUser,
+		Addr:     db.config.DatabaseAddress,
+		Password: db.config.DatabasePass,
+		DB:       db.config.DatabaseUser,
 	})
 
 	// Confirm we can communicate with the redis instance.

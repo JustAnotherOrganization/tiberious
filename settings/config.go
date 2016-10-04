@@ -28,12 +28,13 @@ type Config struct {
 	/* RedisHost will need to be set if using built in redis handling:
 	 * example: localhost:6379
 	 */
-	RedisHost string `yaml:"redishost"`
-	// RedisPass will need to be set if using build in redis handling.
-	RedisPass string `yaml:"redispass"`
-	/* RedisUser should be set to the database number to use in redis.
+	DatabaseAddress string `yaml:"databasehost"`
+	// DatabasePass will need to be set if using build in redis handling.
+	DatabasePass string `yaml:"databasepass"`
+	/* DatabaseUser represents the user to be used in the database connection.
+	 * For Redis, it should be set to the database number to use in redis.
 	 * Unless using redis for something else 0 should suffice. */
-	RedisUser int64 `yaml:"redisuser"`
+	DatabaseUser int64 `yaml:"databaseuser"`
 	// ErrorLog allows setting a file location to log errors to.
 	ErrorLog string `yaml:"errorlog"`
 	// DebugLog allows setting a file location to log standard information.
