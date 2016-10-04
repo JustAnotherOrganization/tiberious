@@ -46,7 +46,7 @@ func NewDB(c settings.Config) (Client, error) {
 			return client, errors.Wrap(err, "newRedisClient")
 		}
 
-		logger.Info("User database started on redis db", client.config.RedisUser)
+		logger.Info("User database started on redis db", client.config.DatabaseUser)
 	}
 
 	return client, nil

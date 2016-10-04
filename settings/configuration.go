@@ -52,9 +52,9 @@ func setDefaults() {
 	config.ErrorLog = ""
 	config.DebugLog = ""
 	config.AllowGuests = true
-	config.RedisHost = "localhost:6379"
-	config.RedisPass = ""
-	config.RedisUser = 0
+	config.DatabaseAddress = "localhost:6379"
+	config.DatabasePass = ""
+	config.DatabaseUser = 0
 }
 
 // GetConfig returns the current configuration file.
