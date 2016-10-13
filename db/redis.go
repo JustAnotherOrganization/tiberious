@@ -1,6 +1,8 @@
 package db
 
 import (
+	"bytes"
+	"strconv"
 	"tiberious/logger"
 	"tiberious/types"
 
@@ -328,4 +330,17 @@ func (r *rClient) deleteUser(user *types.User) error {
 	}
 
 	return nil
+}
+
+// GenRedisProto is an external function that can be used to generate Redis
+// protocol text for mass insertion via CLI.
+func GenRedisProto(cmd []string) string {
+	var ret string
+	ret = "*" + strconv.Itoa(len(cmd)) + "\r\n"
+	for _, v := range cmd {
+		ret += "$" + strconv.FormatInt(bytes.NewReader([]byte(v)).Size(), 10) + "\r\n"
+		ret += v + "\r\n"
+	}
+
+	return ret
 }
