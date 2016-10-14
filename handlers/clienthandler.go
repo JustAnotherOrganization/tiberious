@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pborman/uuid"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -30,18 +31,20 @@ func init() {
 	}
 }
 
-func authenticate(client *types.Client, token types.AuthToken) int {
+func authenticate(client *types.Client, token types.AuthToken) (banScore int, err error) {
+	banScore = 0
 	keys, err := dbClient.GetKeySet("user-*-" + token.AccountName + "-*")
 	if err != nil {
-		logger.Error(err)
+		err = errors.Wrap(err, "dbClient.GetKeySet")
+		return
 	}
 
 	if len(keys) == 0 {
+		banScore = 1
 		if err = client.Error(types.IncorrectCredentials, ""); err != nil {
-			logger.Error(err)
+			err = errors.Wrap(err, "client.Error")
 		}
-
-		return 1
+		return
 	}
 
 	slice := strings.Split(keys[0], "-")
@@ -49,24 +52,25 @@ func authenticate(client *types.Client, token types.AuthToken) int {
 	if err != nil {
 		if err == types.NotInDB {
 			if err = client.Error(types.IncorrectCredentials, ""); err != nil {
-				logger.Error(err)
+				err = errors.Wrap(err, "client.Error")
 			}
 		} else {
-			logger.Error(err)
+			err = errors.Wrap(err, "dbClient.GetUserData")
 		}
+		return
 	}
 
 	if token.Password != user.Password {
-		if err := client.Error(types.IncorrectCredentials, ""); err != nil {
-			logger.Error(err)
+		banScore = 1
+		if err = client.Error(types.IncorrectCredentials, ""); err != nil {
+			err = errors.Wrap(err, "client.Error")
 		}
-
-		return 1
+		return
 	}
 
 	if client.User.Type == "guest" {
-		if err := dbClient.DeleteUser(client.User); err != nil {
-			logger.Error(err)
+		if err = dbClient.DeleteUser(client.User); err != nil {
+			err = errors.Wrap(err, "dbClient.DeleteUser")
 		}
 	}
 
@@ -77,29 +81,29 @@ func authenticate(client *types.Client, token types.AuthToken) int {
 	client.User = user
 	client.Authorized = true
 	client.User.Connected = true
-	if err := dbClient.WriteUserData(client.User); err != nil {
-		logger.Error(err)
+	if err = dbClient.WriteUserData(client.User); err != nil {
+		err = errors.Wrap(err, "dbClient.WriteUserData")
 	}
 
 	clients[client.User.ID.String()] = client
 
-	if err := client.Alert(types.OK, ""); err != nil {
-		logger.Error(err)
+	if err = client.Alert(types.OK, ""); err != nil {
+		err = errors.Wrap(err, "client.Alert")
 	}
 
-	return 0
+	return
 }
 
 /* Always make sure a new ID is unique...
  * the probability of a UUID collision is somewhere around 1% in 100 million
  * UUIDs but we'll be overly cautious and check anyway. */
-func getUniqueID() uuid.UUID {
+func getUniqueID() (uuid.UUID, error) {
 	var id uuid.UUID
 	for {
 		id = uuid.NewRandom()
 		exists, err := dbClient.UserExists(id.String())
 		if err != nil {
-			logger.Error(err)
+			return nil, errors.Wrap(err, "dbClient.UserExists")
 		}
 		if exists {
 			continue
@@ -107,16 +111,21 @@ func getUniqueID() uuid.UUID {
 		break
 	}
 
-	return id
+	return id, nil
 }
 
 // ClientHandler handles all client interactions
 func ClientHandler(conn *websocket.Conn) {
+	var err error
+
 	client := types.NewClient()
 	client.Conn = conn
 	client.User = new(types.User)
 	// Set the UUID and initialize a username of "guest"
-	client.User.ID = getUniqueID()
+	client.User.ID, err = getUniqueID()
+	if err != nil {
+		logger.Error(err)
+	}
 
 	guests, err := dbClient.GetKeySet("user-guest-*-*")
 	if err != nil {
@@ -132,10 +141,16 @@ func ClientHandler(conn *websocket.Conn) {
 	clients[client.User.ID.String()] = client
 
 	if config.AllowGuests {
-		defgroup := GetGroup("#default")
+		defgroup, err := GetGroup("#default")
+		if err != nil {
+			logger.Error(err)
+		}
 		defgroup.Users[client.User.ID.String()] = client.User
 		client.User.Groups = append(client.User.Groups, "#default")
-		room := GetRoom("#default", "#general")
+		room, err := GetRoom("#default", "#general")
+		if err != nil {
+			logger.Error(err)
+		}
 		client.User.Rooms = append(client.User.Rooms, "#default/#general")
 		room.Users[client.User.ID.String()] = client.User
 
@@ -190,7 +205,11 @@ func ClientHandler(conn *websocket.Conn) {
 			break
 		}
 
-		if ban := ParseMessage(client, rawmsg); ban > 0 {
+		ban, err := ParseMessage(client, rawmsg)
+		if err != nil {
+			logger.Info(err)
+		}
+		if ban > 0 {
 			// TODO handle ban-score
 			break
 		}
