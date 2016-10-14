@@ -2,13 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
 	"strings"
 
-	"tiberious/logger"
 	"tiberious/types"
 
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 )
 
 func relayToRoom(room *types.Room, rawmsg []byte) {
@@ -31,34 +30,41 @@ func relayToGroup(group *types.Group, rawmsg []byte) {
 
 /*ParseMessage parses a message object and returns an int back, with a ban-score
  *if this is greater than 0 it is applied to the clients ban-score. */
-func ParseMessage(client *types.Client, rawmsg []byte) int {
+func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error) {
+	banScore = 0
+
 	var message types.MasterObj
-	if err := json.Unmarshal(rawmsg, &message); err != nil {
-		if err := client.Error(types.BadRequestOrObject, "invalid object"); err != nil {
-			logger.Error(err)
+	if err = json.Unmarshal(rawmsg, &message); err != nil {
+		if err2 := client.Error(types.BadRequestOrObject, "invalid object"); err2 != nil {
+			err = errors.Wrap(err2, "client.Error")
 		}
-		return 0
+		return
 	}
 
 	if message.Time <= 0 {
-		if err := client.Error(types.BadRequestOrObject, "missing or invalid time"); err != nil {
-			logger.Error(err)
+		if err = client.Error(types.BadRequestOrObject, "missing or invalid time"); err != nil {
+			err = errors.Wrap(err, "client.Error")
 		}
-		return 0
+		return
 	}
 
 	if !config.AllowGuests && !client.Authorized {
 		if message.Action != "authenticate" {
-			if err := client.Error(types.NotAuthorized, ""); err != nil {
-				logger.Error(err)
+			banScore = 1
+			if err = client.Error(types.NotAuthorized, ""); err != nil {
+				err = errors.Wrap(err, "client.Error")
 			}
-			return 1
+			return
 		}
 	}
 
 	switch {
 	case message.Action == "authenticate":
-		return authenticate(client, message.User)
+		banScore, err = authenticate(client, message.User)
+		if err != nil {
+			err = errors.Wrap(err, "authenticate")
+		}
+		return
 	case message.Action == "msg":
 		/* TODO Fixup message parsing (should work for 1to1 even if the user is
 		 * not currently online (with databasing enabled, otherwise should
@@ -67,27 +73,37 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		switch {
 		// All room's start with "#"
 		case IsRoomName(message.To):
+			var (
+				group *types.Group
+				room  *types.Room
+			)
+
 			if !strings.Contains(message.To, "/") {
-				if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
-					logger.Error(err)
+				if err = client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
+					err = errors.Wrap(err, "client.Error")
 				}
-				return 0
+				return
 			}
 			slice := strings.Split(message.To, "/")
-			group := GetGroup(slice[0])
+			group, err = GetGroup(slice[0])
+			if err != nil {
+				err = errors.Wrap(err, "GetGroup")
+				return
+			}
+
 			if group == nil {
-				if err := client.Error(types.NotFound, "group does not exist"); err != nil {
-					logger.Error(err)
+				if err = client.Error(types.NotFound, "group does not exist"); err != nil {
+					err = errors.Wrap(err, "client.Error")
 				}
-				return 0
+				return
 			}
 
 			// Block guest connections from messaging outside of group #default.
 			if client.User.Type == "guest" && group.Title != "#default" {
-				if err := client.Error(types.Forbidden, "guest account, please authenticate"); err != nil {
-					logger.Error(err)
+				if err = client.Error(types.Forbidden, "guest account, please authenticate"); err != nil {
+					err = errors.Wrap(err, "client.Error")
 				}
-				return 0
+				return
 			}
 
 			// Block messages from outside a group.
@@ -99,18 +115,23 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			}
 
 			if !member {
-				if err := client.Error(types.Forbidden, ""); err != nil {
-					logger.Error(err)
+				banScore = 1
+				if err = client.Error(types.Forbidden, ""); err != nil {
+					err = errors.Wrap(err, "client.Error")
 				}
-				return 1
+				return
 			}
 
-			room := GetRoom(slice[0], slice[1])
+			room, err = GetRoom(slice[0], slice[1])
+			if err != nil {
+				err = errors.Wrap(err, "GetRoom")
+				return
+			}
 			if room == nil {
-				if err := client.Error(types.NotFound, ""); err != nil {
-					logger.Error(err)
+				if err = client.Error(types.NotFound, ""); err != nil {
+					err = errors.Wrap(err, "client.Error")
 				}
-				return 0
+				return
 			}
 
 			// Block external messages on private rooms.
@@ -122,10 +143,11 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 			}
 
 			if room.Private && !member {
-				if err := client.Error(types.Forbidden, ""); err != nil {
-					log.Fatalln(err)
+				banScore = 1
+				if err = client.Error(types.Forbidden, ""); err != nil {
+					err = errors.Wrap(err, "client.Error")
 				}
-				return 1
+				return
 			}
 			go relayToRoom(room, rawmsg)
 			break
@@ -148,55 +170,65 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 				break
 			}
 
-			if err := client.Error(types.NotFound, ""); err != nil {
-				logger.Error(err)
+			if err = client.Error(types.NotFound, ""); err != nil {
+				err = errors.Wrap(err, "client.Error")
 			}
 
-			return 0
+			return
 		}
 
 		// Send a response back saying the message was sent.
-		if err := client.Alert(types.OK, ""); err != nil {
-			logger.Error(err)
+		if err = client.Alert(types.OK, ""); err != nil {
+			err = errors.Wrap(err, "client.Alert")
 		}
 
 		break
 	// Join messages should include both a group and a room name.
 	case message.Action == "join":
+		var (
+			group *types.Group
+			room  *types.Room
+		)
+
 		if !IsRoomName(message.Room) {
-			if err := client.Error(types.BadRequestOrObject, "room names should start with '#'"); err != nil {
-				logger.Error(err)
+			if err = client.Error(types.BadRequestOrObject, "room names should start with '#'"); err != nil {
+				err = errors.Wrap(err, "client.Error")
 			}
-			return 0
+			return
 		}
 
 		if !strings.Contains(message.Room, "/") {
-			if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
-				logger.Error(err)
+			if err = client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
+				err = errors.Wrap(err, "client.Error")
 			}
-			return 0
+			return
 		}
 		slice := strings.Split(message.Room, "/")
 		if len(slice) != 2 {
-			if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
-				logger.Error(err)
+			if err = client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
+				err = errors.Wrap(err, "client.Error")
 			}
-			return 0
+			return
 		}
-		group := GetGroup(slice[0])
+		group, err = GetGroup(slice[0])
+		if err != nil {
+			err = errors.Wrap(err, "GetGroup")
+			return
+		}
 		if group == nil {
-			if err := client.Error(types.NotFound, "group does not exist"); err != nil {
-				logger.Error(err)
+			if err = client.Error(types.NotFound, "group does not exist"); err != nil {
+				err = errors.Wrap(err, "client.Error")
 			}
-			return 0
+			return
 		}
 
 		// Block guest connections from messaging outside of group #default.
 		if client.User.Type == "guest" && group.Title != "#default" {
-			if err := client.Error(types.Forbidden, "guest account, please authenticate"); err != nil {
-				logger.Error(err)
+			banScore = 1
+			if err = client.Error(types.Forbidden, "guest account, please authenticate"); err != nil {
+				err = errors.Wrap(err, "client.Error")
 			}
-			return 0
+			return
 		}
 
 		// Block users from joining if they're outside the group.
@@ -208,61 +240,82 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		}
 
 		if !member {
-			if err := client.Error(types.Forbidden, ""); err != nil {
-				logger.Error(err)
+			banScore = 1
+			if err = client.Error(types.Forbidden, ""); err != nil {
+				err = errors.Wrap(err, "client.Error")
 			}
-			return 1
+			return
 		}
 
 		// TODO implement private rooms
-		room := GetRoom(slice[0], slice[1])
+		room, err = GetRoom(slice[0], slice[1])
+		if err != nil {
+			err = errors.Wrap(err, "GetRoom")
+			return
+		}
 		if room == nil {
-			room = GetNewRoom(slice[0], slice[1])
+			room, err = GetNewRoom(slice[0], slice[1])
+			if err != nil {
+				err = errors.Wrap(err, "GetNewRoom")
+				return
+			}
 			room.Users = make(map[string]*types.User)
 		}
 
 		room.Users[client.User.ID.String()] = client.User
 
 		// Update the room data for the database.
-		if err := WriteRoomData(room); err != nil {
-			logger.Error(err)
+		if err = WriteRoomData(room); err != nil {
+			err = errors.Wrap(err, "WriteRoomData")
 		}
 
 		// Send a response back confirming we joined the room..
-		if err := client.Alert(types.OK, ""); err != nil {
-			logger.Error(err)
+		if err = client.Alert(types.OK, ""); err != nil {
+			err = errors.Wrap(err, "client.Alert")
 		}
 
 		break
 	case message.Action == "leave":
 	case message.Action == "part":
+		var (
+			group *types.Group
+			room  *types.Room
+		)
+
 		if !IsRoomName(message.Room) {
-			if err := client.Error(types.BadRequestOrObject, "room names should start with '#'"); err != nil {
-				logger.Error(err)
+			if err = client.Error(types.BadRequestOrObject, "room names should start with '#'"); err != nil {
+				err = errors.Wrap(err, "client.Error")
 			}
-			return 0
+			return
 		}
 
 		if !strings.Contains(message.Room, "/") {
-			if err := client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
-				logger.Error(err)
+			if err = client.Error(types.BadRequestOrObject, "room names should be type of 'group/room'"); err != nil {
+				err = errors.Wrap(err, "client.Error")
 			}
-			return 0
+			return
 		}
 		slice := strings.Split(message.Room, "/")
-		group := GetGroup(slice[0])
+		group, err = GetGroup(slice[0])
+		if err != nil {
+			err = errors.Wrap(err, "GetGroup")
+			return
+		}
 		if group == nil {
-			if err := client.Error(types.NotFound, "group does not exist"); err != nil {
-				logger.Error(err)
+			if err = client.Error(types.NotFound, "group does not exist"); err != nil {
+				err = errors.Wrap(err, "client.Error")
 			}
-			return 0
+			return
 		}
 
-		var room *types.Room
-		room = GetRoom(slice[0], slice[1])
+		room, err = GetRoom(slice[0], slice[1])
+		if err != nil {
+			err = errors.Wrap(err, "GetRoom")
+			return
+		}
 		if room == nil {
-			if err := client.Error(types.NotFound, ""); err != nil {
-				logger.Error(err)
+			if err = client.Error(types.NotFound, ""); err != nil {
+				err = errors.Wrap(err, "client.Error")
 			}
 			break
 		}
@@ -277,8 +330,8 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 
 		if !ispresent {
 			// TODO should this return a different error number?
-			if err := client.Error(types.Gone, ""); err != nil {
-				logger.Error(err)
+			if err = client.Error(types.Gone, ""); err != nil {
+				err = errors.Wrap(err, "client.Error")
 			}
 			break
 		}
@@ -286,22 +339,22 @@ func ParseMessage(client *types.Client, rawmsg []byte) int {
 		delete(room.Users, client.User.ID.String())
 
 		// Update the room data for the database.
-		if err := WriteRoomData(room); err != nil {
-			logger.Error(err)
+		if err = WriteRoomData(room); err != nil {
+			err = errors.Wrap(err, "WriteRoomData")
 		}
 
 		// Send a response back confirming we left the room..
-		if err := client.Alert(types.OK, ""); err != nil {
-			logger.Error(err)
+		if err = client.Alert(types.OK, ""); err != nil {
+			err = errors.Wrap(err, "client.Alert")
 		}
 
 		break
 	default:
-		if err := client.Error(types.BadRequestOrObject, ""); err != nil {
-			logger.Error(err)
+		if err = client.Error(types.BadRequestOrObject, ""); err != nil {
+			err = errors.Wrap(err, "client.Error")
 		}
 		break
 	}
 
-	return 0
+	return
 }

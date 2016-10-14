@@ -4,4 +4,10 @@ writebuffer: 1024
 messagestore: false
 messageexpire: 0
 messageoverflow: 0
-userdatabase: 0
+userdatebase: 0
+errorlog: ""
+debuglog: ""
+allowguests: true
+databaseaddress: "localhost:6379"
+databasepass: ""
+databaseuser: 0
