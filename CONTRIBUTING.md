@@ -13,7 +13,7 @@ You can get your own fork/copy of [tiberious](https://github.com/JustAnotherOrga
 You need to clone (download) it to local machine using
 
 ```sh
-$ git clone https://github.com/Your_Username/tiberious.git
+$ git clone https://github.com/*Your_Username*/tiberious.git
 ```
 
 > This makes a local copy of repository in your machine.
@@ -33,8 +33,8 @@ Run the following commands to see that *your local copy* has a reference to *you
 
 ```sh
 $ git remote -v
-origin  https://github.com/Your_Username/tiberious.git (fetch)
-origin  https://github.com/Your_Username/tiberious.git (push)
+origin  https://github.com/*Your_Username*/tiberious.git (fetch)
+origin  https://github.com/*Your_Username*/tiberious.git (push)
 ```
 
 Now, lets add a reference to the original [tiberious](https://github.com/JustAnotherOrganization/tiberious) repository using
@@ -49,8 +49,8 @@ See the changes using
 
 ```sh
 $ git remote -v
-origin    https://github.com/Your_Username/tiberious.git (fetch)
-origin    https://github.com/Your_Username/tiberious.git (push)
+origin    https://github.com/*Your_Username*/tiberious.git (fetch)
+origin    https://github.com/*Your_Username*/tiberious.git (push)
 upstream  https://github.com/JustAnotherOrganization/tiberious.git (fetch)
 upstream  https://github.com/JustAnotherOrganization/tiberious.git (push)
 ```
@@ -91,41 +91,45 @@ Once you have completed these steps, you are ready to start contributing by chec
 
 ### 7. Create a new branch :bangbang:
 
-Whenever you are going to make contribution. Please create seperate branch using command and keep your `master` branch clean (i.e. synced with remote branch).
+Whenever you are going to make contribution, please create a seperate branch using the following commands and keep your `master` branch clean (i.e. synced with remote branch).
 
 ```sh
-# It will create a new branch with name Branch_Name and switch to branch Folder_Name
-$ git checkout -b Folder_Name
+# It will create a new branch with name Branch_Name and switch to it
+$ git checkout -b *Branch_Name*
 ```
 
-Create a seperate branch for contibution and try to use same name of branch as of folder.
-
-To switch to desired branch
+To switch to the desired branch
 
 ```sh
-# To switch from one folder to other
-$ git checkout Folder_Name
+# To switch from one branch to another
+$ git checkout *Branch_Name*
 ```
 
-To add the changes to the branch. Use
+To add all the changes to the branch. Use
 
 ```sh
-# To add all files to branch Folder_Name
+# To add all files to branch Branch_Name
 $ git add .
+```
+
+Or you can only add the files you deem important
+```sh
+# To add selected files to branch Branch_Name
+$ git add *filenames*
 ```
 
 Type in a message relevant for the code reveiwer using
 
 ```sh
 # This message get associated with all files you have changed
-$ git commit -m 'relevant message'
+$ git commit -m '*relevant message*'
 ```
 
 Now, Push your awesome work to your remote repository using
 
 ```sh
 # To push your work to your remote repository
-$ git push -u origin Folder_Name
+$ git push -u origin *Branch_Name*
 ```
 
 Finally, go to your repository in browser and click on `compare and pull requests`.
