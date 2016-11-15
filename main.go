@@ -21,7 +21,12 @@ func newConnection(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		logger.Error(err)
+		if _, ok := err.(websocket.HandshakeError); ok {
+			w.WriteHeader(404)
+			w.Write([]byte("Invalid websocket handshake"))
+			return
+		}
+		logger.Error(err) // TODO Don't call logger.Error here?
 		return
 	}
 
