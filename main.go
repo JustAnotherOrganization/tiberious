@@ -3,14 +3,18 @@ package main
 import (
 	"net/http"
 
-	"tiberious/handlers"
+	"tiberious/handlers/client"
 	"tiberious/logger"
 	"tiberious/settings"
+	"tiberious/types"
 
 	"github.com/gorilla/websocket"
 )
 
-var config settings.Config
+var (
+	config        settings.Config
+	clientHandler client.Handler
+)
 
 // TODO move this into a separate handler of some form.
 func newConnection(w http.ResponseWriter, r *http.Request) {
@@ -30,14 +34,17 @@ func newConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go handlers.ClientHandler(conn)
-}
-
-func init() {
-	config = settings.GetConfig()
+	go clientHandler.HandleConnection(conn)
 }
 
 func main() {
+	config = settings.GetConfig()
+	var err error
+	clientHandler, err = client.NewHandler(config, make(map[string]*types.Client))
+	if err != nil {
+		logger.Error(err)
+	}
+
 	http.HandleFunc("/", http.NotFound)
 	http.HandleFunc("/ws", newConnection)
 	logger.Info("Starting Tiberious on", config.Port)

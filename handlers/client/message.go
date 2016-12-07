@@ -1,36 +1,35 @@
-package handlers
+package client
 
 import (
 	"encoding/json"
 	"strings"
-
 	"tiberious/types"
 
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 )
 
-func relayToRoom(room *types.Room, rawmsg []byte) {
+func (h *handler) relayToRoom(room *types.Room, rawmsg []byte) {
 	for _, u := range room.Users {
-		c := GetClientForUser(u) // In clienthandler.go
+		c := h.GetClientForUser(u)
 		if c != nil {
 			c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
 		}
 	}
 }
 
-func relayToGroup(group *types.Group, rawmsg []byte) {
+func (h *handler) relayToGroup(group *types.Group, rawmsg []byte) {
 	for _, u := range group.Users {
-		c := GetClientForUser(u) // In clienthandler.go
+		c := h.GetClientForUser(u)
 		if c != nil {
 			c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
 		}
 	}
 }
 
-/*ParseMessage parses a message object and returns an int back, with a ban-score
- *if this is greater than 0 it is applied to the clients ban-score. */
-func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error) {
+// parseMessage parses a message object and returns an int back, with a ban-score
+// if this is greater than 0 it is applied to the clients ban-score. */
+func (h *handler) parseMessage(client *types.Client, rawmsg []byte) (banScore int, err error) {
 	banScore = 0
 
 	var message types.MasterObj
@@ -48,7 +47,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 		return
 	}
 
-	if !config.AllowGuests && !client.Authorized {
+	if !h.config.AllowGuests && !client.Authorized {
 		if message.Action != "authenticate" {
 			banScore = 1
 			if err = client.Error(types.NotAuthorized, ""); err != nil {
@@ -60,7 +59,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 
 	switch {
 	case message.Action == "authenticate":
-		banScore, err = authenticate(client, message.User)
+		banScore, err = h.authenticate(client, message.User)
 		if err != nil {
 			err = errors.Wrap(err, "authenticate")
 		}
@@ -72,7 +71,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 
 		switch {
 		// All room's start with "#"
-		case IsRoomName(message.To):
+		case h.groupHandler.IsRoomName(message.To):
 			var (
 				group *types.Group
 				room  *types.Room
@@ -85,7 +84,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 				return
 			}
 			slice := strings.Split(message.To, "/")
-			group, err = GetGroup(slice[0])
+			group, err = h.groupHandler.GetGroup(slice[0])
 			if err != nil {
 				err = errors.Wrap(err, "GetGroup")
 				return
@@ -122,7 +121,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 				return
 			}
 
-			room, err = GetRoom(slice[0], slice[1])
+			room, err = h.groupHandler.GetRoom(slice[0], slice[1])
 			if err != nil {
 				err = errors.Wrap(err, "GetRoom")
 				return
@@ -149,7 +148,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 				}
 				return
 			}
-			go relayToRoom(room, rawmsg)
+			go h.relayToRoom(room, rawmsg)
 			break
 		default:
 			// Handle 1to1 messaging.
@@ -159,7 +158,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 			 * and a separate one for users not being logged on. */
 
 			var relayed = false
-			for k, c := range clients {
+			for k, c := range h.clients {
 				if message.To == k {
 					c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
 					relayed = true
@@ -190,7 +189,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 			room  *types.Room
 		)
 
-		if !IsRoomName(message.Room) {
+		if !h.groupHandler.IsRoomName(message.Room) {
 			if err = client.Error(types.BadRequestOrObject, "room names should start with '#'"); err != nil {
 				err = errors.Wrap(err, "client.Error")
 			}
@@ -210,7 +209,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 			}
 			return
 		}
-		group, err = GetGroup(slice[0])
+		group, err = h.groupHandler.GetGroup(slice[0])
 		if err != nil {
 			err = errors.Wrap(err, "GetGroup")
 			return
@@ -248,13 +247,13 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 		}
 
 		// TODO implement private rooms
-		room, err = GetRoom(slice[0], slice[1])
+		room, err = h.groupHandler.GetRoom(slice[0], slice[1])
 		if err != nil {
 			err = errors.Wrap(err, "GetRoom")
 			return
 		}
 		if room == nil {
-			room, err = GetNewRoom(slice[0], slice[1])
+			room, err = h.groupHandler.GetNewRoom(slice[0], slice[1])
 			if err != nil {
 				err = errors.Wrap(err, "GetNewRoom")
 				return
@@ -265,7 +264,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 		room.Users[client.User.ID.String()] = client.User
 
 		// Update the room data for the database.
-		if err = WriteRoomData(room); err != nil {
+		if err = h.groupHandler.WriteRoomData(room); err != nil {
 			err = errors.Wrap(err, "WriteRoomData")
 		}
 
@@ -282,7 +281,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 			room  *types.Room
 		)
 
-		if !IsRoomName(message.Room) {
+		if !h.groupHandler.IsRoomName(message.Room) {
 			if err = client.Error(types.BadRequestOrObject, "room names should start with '#'"); err != nil {
 				err = errors.Wrap(err, "client.Error")
 			}
@@ -296,7 +295,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 			return
 		}
 		slice := strings.Split(message.Room, "/")
-		group, err = GetGroup(slice[0])
+		group, err = h.groupHandler.GetGroup(slice[0])
 		if err != nil {
 			err = errors.Wrap(err, "GetGroup")
 			return
@@ -308,7 +307,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 			return
 		}
 
-		room, err = GetRoom(slice[0], slice[1])
+		room, err = h.groupHandler.GetRoom(slice[0], slice[1])
 		if err != nil {
 			err = errors.Wrap(err, "GetRoom")
 			return
@@ -339,7 +338,7 @@ func ParseMessage(client *types.Client, rawmsg []byte) (banScore int, err error)
 		delete(room.Users, client.User.ID.String())
 
 		// Update the room data for the database.
-		if err = WriteRoomData(room); err != nil {
+		if err = h.groupHandler.WriteRoomData(room); err != nil {
 			err = errors.Wrap(err, "WriteRoomData")
 		}
 
