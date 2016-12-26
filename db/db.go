@@ -2,11 +2,17 @@ package db
 
 import (
 	"strings"
-	"tiberious/logger"
 	"tiberious/settings"
 	"tiberious/types"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
+)
+
+var (
+	// ErrInvalidConfig is returned when the database is improperly setup and
+	// no data can be written. This should never occur.
+	ErrInvalidConfig = errors.New("Invalid config: no data written")
 )
 
 type (
@@ -29,24 +35,26 @@ type (
 		config settings.Config
 
 		rdis rdisClient
+		log  *logrus.Logger
 	}
 )
 
 // NewDB returns a new database client
-func NewDB(c settings.Config) (Client, error) {
+func NewDB(c settings.Config, log *logrus.Logger) (Client, error) {
 	client := &dbClient{
 		config: c,
+		log:    log,
 	}
 
 	if client.config.UserDatabase == 0 {
 		// Load Redis DB
 		var err error
-		client.rdis, err = client.newRedisClient()
+		client.rdis, err = client.newRedisClient(log)
 		if err != nil {
 			return client, errors.Wrap(err, "newRedisClient")
 		}
 
-		logger.Info("User database started on redis db", client.config.DatabaseUser)
+		client.log.Info("User database started on redis db", client.config.DatabaseUser)
 	}
 
 	return client, nil
@@ -70,12 +78,8 @@ func (db *dbClient) WriteUserData(user *types.User) error {
 	case db.config.UserDatabase == 0:
 		return db.rdis.writeUserData(user)
 	default:
-		// TODO determine if this should be a fatal error, it should never happen
-		logger.Info("Invalid config, no user data written")
-		break
+		return ErrInvalidConfig
 	}
-
-	return nil
 }
 
 // WriteRoomData writes a given room object to the current database.
@@ -84,12 +88,8 @@ func (db *dbClient) WriteRoomData(room *types.Room) error {
 	case db.config.UserDatabase == 0:
 		return db.rdis.writeRoomData(room)
 	default:
-		// TODO determine if this should be a fatal error, it should never happen
-		logger.Info("Invalid config, no room data written")
-		break
+		return ErrInvalidConfig
 	}
-
-	return nil
 }
 
 // WriteGroupData writes a given group object to the current database.
@@ -98,12 +98,8 @@ func (db *dbClient) WriteGroupData(group *types.Group) error {
 	case db.config.UserDatabase == 0:
 		return db.rdis.writeGroupData(group)
 	default:
-		// TODO determine if this should be a fatal error, it should never happen
-		logger.Info("Invalid config, no group data written")
-		break
+		return ErrInvalidConfig
 	}
-
-	return nil
 }
 
 // UserExists returns whether a user exists in the database.
@@ -216,10 +212,6 @@ func (db *dbClient) DeleteUser(user *types.User) error {
 	case db.config.UserDatabase == 0:
 		return db.rdis.deleteUser(user)
 	default:
-		// TODO determine if this should be a fatal error, it should never happen
-		logger.Info("Invalid config, user not deleted")
-		break
+		return ErrInvalidConfig
 	}
-
-	return nil
 }

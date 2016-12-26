@@ -3,11 +3,11 @@ package db
 import (
 	"bytes"
 	"strconv"
-	"tiberious/logger"
 	"tiberious/types"
 
 	"gopkg.in/redis.v3"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 )
@@ -46,19 +46,24 @@ type (
 
 	rClient struct {
 		*redis.Client
+
+		log *logrus.Logger
 	}
 )
 
-func (db *dbClient) newRedisClient() (rdisClient, error) {
+func (db *dbClient) newRedisClient(log *logrus.Logger) (rdisClient, error) {
 	if db.config.DatabaseAddress == "" {
 		return nil, errMissingDatabaseHost
 	}
 
-	if db.config.DatabasePass == "" {
-		logger.Info("Insecure redis database is not recommended")
+	r := &rClient{
+		log: log,
 	}
 
-	r := &rClient{}
+	if db.config.DatabasePass == "" {
+		r.log.Info("Insecure redis database is not recommended")
+	}
+
 	r.Client = redis.NewClient(&redis.Options{
 		//r.Client = redis.NewClient(&redis.Options{
 		Addr:     db.config.DatabaseAddress,
@@ -97,7 +102,7 @@ func boolstr(s string) bool {
 func (r *rClient) updateSet(key string, new []string) {
 	old, err := r.Client.SMembers(key).Result()
 	if err != nil {
-		logger.Error(err)
+		r.log.Error(err)
 	}
 
 	for _, o := range old {
@@ -110,7 +115,7 @@ func (r *rClient) updateSet(key string, new []string) {
 
 		if rem {
 			if err := r.Client.SRem(key, o).Err(); err != nil {
-				logger.Error(err)
+				r.log.Error(err)
 			}
 		}
 	}
@@ -125,7 +130,7 @@ func (r *rClient) updateSet(key string, new []string) {
 
 		if add {
 			if err := r.Client.SAdd(key, n).Err(); err != nil {
-				logger.Error(err)
+				r.log.Error(err)
 			}
 		}
 	}

@@ -2,42 +2,37 @@ package settings
 
 import (
 	"io/ioutil"
-	"log"
 	"path/filepath"
 
 	"gopkg.in/yaml.v2"
 )
 
-var config Config
+var config *Config
 
-/* Since logger relies on settings for the file location of logs init errors
- * here are passed directly to the standard logger. */
-func init() {
+const usingDefaults = "Using default settings"
+
+// Init loads are configuration data.
+func Init() (string, error) {
 	/* Set default values then overwrite them with ones in the yml, this way
 	 * if something is missing from the yml the defaults apply properly. */
+	config = &Config{}
 	setDefaults()
 	// If no config file is found set defaults.
 	configfile, err := filepath.Abs("./config.yml")
 	if err != nil {
-		log.Println(err)
-		log.Println("Using default settings")
-		return
+		return usingDefaults, err
 	}
 	// If unable to read the file set defaults.
 	configyaml, err := ioutil.ReadFile(configfile)
 	if err != nil {
-		log.Println(err)
-		log.Println("Using default settings")
-		return
+		return usingDefaults, err
 	}
 	// If unable to parse the yaml set defaults.
 	if err := yaml.Unmarshal([]byte(configyaml), &config); err != nil {
-		log.Println(err)
-		log.Println("Using default settings")
-		return
+		return usingDefaults, err
 	}
 
-	log.Println("Settings loaded from config.yml")
+	return "Settings loaded from config.yml", nil
 }
 
 func setDefaults() {
@@ -49,8 +44,7 @@ func setDefaults() {
 	config.MessageExpire = 0
 	config.MessageOverflow = 0
 	config.UserDatabase = 0
-	config.ErrorLog = ""
-	config.DebugLog = ""
+	config.Log = ""
 	config.AllowGuests = true
 	config.DatabaseAddress = "localhost:6379"
 	config.DatabasePass = ""
@@ -58,6 +52,6 @@ func setDefaults() {
 }
 
 // GetConfig returns the current configuration file.
-func GetConfig() Config {
+func GetConfig() *Config {
 	return config
 }
