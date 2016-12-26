@@ -54,7 +54,7 @@ func NewDB(c settings.Config, log *logrus.Logger) (Client, error) {
 			return client, errors.Wrap(err, "newRedisClient")
 		}
 
-		client.log.Info("User database started on redis db", client.config.DatabaseUser)
+		client.log.Infof("User database started on redis db %d", client.config.DatabaseUser)
 	}
 
 	return client, nil
