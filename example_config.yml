@@ -5,8 +5,7 @@ messagestore: false
 messageexpire: 0
 messageoverflow: 0
 userdatebase: 0
-errorlog: ""
-debuglog: ""
+log: ""
 allowguests: true
 databaseaddress: "localhost:6379"
 databasepass: ""
