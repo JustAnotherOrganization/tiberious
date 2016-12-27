@@ -4,6 +4,11 @@
 	"GodepVersion": "v74",
 	"Deps": [
 		{
+			"ImportPath": "github.com/Sirupsen/logrus",
+			"Comment": "v0.10.0-18-g6d9ae30",
+			"Rev": "6d9ae300aaf85d6acd2e5424081c7fcddb21dab8"
+		},
+		{
 			"ImportPath": "github.com/gorilla/websocket",
 			"Rev": "e2e3d8414d0fbae04004f151979f4e27c6747fe7"
 		},
@@ -20,6 +25,10 @@
 		{
 			"ImportPath": "golang.org/x/crypto/pbkdf2",
 			"Rev": "c197bcf24cde29d3f73c7b4ac6fd41f4384e8af6"
+		},
+		{
+			"ImportPath": "golang.org/x/sys/unix",
+			"Rev": "d4feaf1a7e61e1d9e79e6c4e76c6349e9cab0a03"
 		},
 		{
 			"ImportPath": "gopkg.in/bsm/ratelimit.v1",
