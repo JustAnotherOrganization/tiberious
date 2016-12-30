@@ -40,6 +40,7 @@ func (h *handler) GetNewRoom(gname, rname string) (*types.Room, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "GetGroup")
 	}
+
 	if group == nil {
 		return nil, nil
 	}

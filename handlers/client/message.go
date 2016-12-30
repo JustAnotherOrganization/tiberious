@@ -13,7 +13,9 @@ func (h *handler) relayToRoom(room *types.Room, rawmsg []byte) {
 	for _, u := range room.Users {
 		c := h.GetClientForUser(u)
 		if c != nil {
-			c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
+			if err := c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg); err != nil {
+				h.log.Error(err)
+			}
 		}
 	}
 }
@@ -22,7 +24,9 @@ func (h *handler) relayToGroup(group *types.Group, rawmsg []byte) {
 	for _, u := range group.Users {
 		c := h.GetClientForUser(u)
 		if c != nil {
-			c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
+			if err := c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg); err != nil {
+				h.log.Error(err)
+			}
 		}
 	}
 }
@@ -160,7 +164,9 @@ func (h *handler) parseMessage(client *types.Client, rawmsg []byte) (banScore in
 			var relayed = false
 			for k, c := range h.clients {
 				if message.To == k {
-					c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg)
+					if err = c.Conn.WriteMessage(websocket.BinaryMessage, rawmsg); err != nil {
+						h.log.Error(err)
+					}
 					relayed = true
 				}
 			}

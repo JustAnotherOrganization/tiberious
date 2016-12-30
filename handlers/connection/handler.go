@@ -1,32 +1,43 @@
 package connection
 
 import (
-	"net/http"
+	"tiberious/db"
 	"tiberious/handlers/client"
+	"tiberious/handlers/group"
 	"tiberious/settings"
 	"tiberious/types"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 )
 
 type (
 	// Handler provides access to handler.
 	Handler interface {
-		ListenAndServe() error
+		ListenAndServe()
 	}
 
 	handler struct {
 		config        *settings.Config
 		log           *logrus.Logger
 		clientHandler client.Handler
+		groupHandler  group.Handler
 	}
 )
 
-// NewHandler returns a new Handler
+// NewHandler returns a new Handler.
 func NewHandler(config *settings.Config, log *logrus.Logger) (Handler, error) {
-	clientHandler, err := client.NewHandler(config, make(map[string]*types.Client), log)
+	dbClient, err := db.NewDB(config, log)
+	if err != nil {
+		return nil, errors.Wrap(err, "db.NewDB")
+	}
+
+	groupHandler, err := group.NewHandler(config, dbClient, log, "#default", "#general")
+	if err != nil {
+		return nil, errors.Wrap(err, "group.NewHandler")
+	}
+
+	clientHandler, err := client.NewHandler(config, dbClient, groupHandler, make(map[string]*types.Client), log)
 	if err != nil {
 		return nil, errors.Wrap(err, "client.NewHandler")
 	}
@@ -35,33 +46,21 @@ func NewHandler(config *settings.Config, log *logrus.Logger) (Handler, error) {
 		config:        config,
 		log:           log,
 		clientHandler: clientHandler,
+		groupHandler:  groupHandler,
 	}, nil
 }
 
-func (h *handler) newClientConnection(w http.ResponseWriter, r *http.Request) {
-	var upgrader = websocket.Upgrader{
-		ReadBufferSize:  h.config.ReadBufferSize,
-		WriteBufferSize: h.config.WriteBufferSize,
-	}
-
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		if _, ok := err.(websocket.HandshakeError); ok {
-			w.WriteHeader(404)
-			w.Write([]byte("Invalid websocket handshake"))
-			return
+// ListenAndServe starts our inbound routes.
+func (h *handler) ListenAndServe() {
+	go func() {
+		if err := h.startWebsocketRoute(); err != nil {
+			h.log.Fatal(err)
 		}
-		logrus.Error(err)
-		return
-	}
+	}()
 
-	go h.clientHandler.HandleConnection(conn)
-}
-
-// ListenAndServe is a wrapper around http.ListenAndServe
-func (h *handler) ListenAndServe() error {
-	http.HandleFunc("/", http.NotFound)
-	http.HandleFunc("/ws", h.newClientConnection)
-	h.log.Infof("Starting Tiberious on %s", h.config.Port)
-	return http.ListenAndServe(h.config.Port, nil)
+	go func() {
+		if err := h.startAPIRoute(); err != nil {
+			h.log.Fatal(err)
+		}
+	}()
 }

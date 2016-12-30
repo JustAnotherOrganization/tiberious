@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"tiberious/types"
 
-	"gopkg.in/redis.v3"
+	"gopkg.in/redis.v5"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/pborman/uuid"
@@ -33,6 +33,7 @@ var (
 
 type (
 	rdisClient interface {
+		shutdown()
 		updateSet(key string, new []string)
 		getKeySet(search string) ([]string, error)
 		writeUserData(user *types.User) error
@@ -42,10 +43,12 @@ type (
 		getRoomData(gname, rname string) (*types.Room, error)
 		getGroupData(gname string) (*types.Group, error)
 		deleteUser(user *types.User) error
+
+		Client() *redis.Client
 	}
 
 	rClient struct {
-		*redis.Client
+		client *redis.Client
 
 		log *logrus.Logger
 	}
@@ -64,17 +67,14 @@ func (db *dbClient) newRedisClient(log *logrus.Logger) (rdisClient, error) {
 		r.log.Info("Insecure redis database is not recommended")
 	}
 
-	r.Client = redis.NewClient(&redis.Options{
-		//r.Client = redis.NewClient(&redis.Options{
+	r.client = redis.NewClient(&redis.Options{
 		Addr:     db.config.DatabaseAddress,
 		Password: db.config.DatabasePass,
 		DB:       db.config.DatabaseUser,
 	})
-
 	// Confirm we can communicate with the redis instance.
-	_, err := r.Ping().Result()
-	if err != nil {
-		return nil, errors.Wrap(err, "r.Pint().Result")
+	if err := r.client.Ping().Err(); err != nil {
+		return nil, errors.Wrap(err, "r.client.Ping")
 	}
 
 	return r, nil
@@ -97,10 +97,41 @@ func boolstr(s string) bool {
 	return false
 }
 
-/* This seems extremely cumbersome but it's the best way I can think to handle
- * this without deleting the entire set and recreating it. */
+func (r *rClient) shutdown() {
+	var (
+		save *redis.StatusCmd
+		//quit *redis.StatusCmd
+	)
+	if _, err := r.client.Pipelined(func(pipe *redis.Pipeline) error {
+		save = pipe.Save()
+		//quit = pipe.Quit()
+		return nil
+	}); err != nil {
+		r.log.Error(err)
+	}
+
+	if err := save.Err(); err != nil {
+		r.log.Error(err)
+	}
+	//if err := quit.Err(); err != nil {
+	//	r.log.Error(err)
+	//}
+}
+
+// This seems extremely cumbersome but it's the best way I can think to handle
+// this without deleting the entire set and recreating it.
+// This is failing with dynamic tests because apparently redis.Client.Select
+// doesn't survive Go routines....
 func (r *rClient) updateSet(key string, new []string) {
-	old, err := r.Client.SMembers(key).Result()
+	var cmd *redis.StringSliceCmd
+	if _, err := r.client.Pipelined(func(pipe *redis.Pipeline) error {
+		cmd = pipe.SMembers(key)
+		return nil
+	}); err != nil {
+		r.log.Error(err)
+	}
+
+	old, err := cmd.Result()
 	if err != nil {
 		r.log.Error(err)
 	}
@@ -114,7 +145,14 @@ func (r *rClient) updateSet(key string, new []string) {
 		}
 
 		if rem {
-			if err := r.Client.SRem(key, o).Err(); err != nil {
+			var iCmd *redis.IntCmd
+			if _, err := r.client.Pipelined(func(pipe *redis.Pipeline) error {
+				iCmd = pipe.SRem(key, o)
+				return nil
+			}); err != nil {
+				r.log.Error(err)
+			}
+			if err := iCmd.Err(); err != nil {
 				r.log.Error(err)
 			}
 		}
@@ -129,7 +167,14 @@ func (r *rClient) updateSet(key string, new []string) {
 		}
 
 		if add {
-			if err := r.Client.SAdd(key, n).Err(); err != nil {
+			var iCmd *redis.IntCmd
+			if _, err := r.client.Pipelined(func(pipe *redis.Pipeline) error {
+				iCmd = pipe.SAdd(key, n)
+				return nil
+			}); err != nil {
+				r.log.Error(err)
+			}
+			if err := iCmd.Err(); err != nil {
 				r.log.Error(err)
 			}
 		}
@@ -137,22 +182,44 @@ func (r *rClient) updateSet(key string, new []string) {
 }
 
 func (r *rClient) getKeySet(search string) ([]string, error) {
-	return r.Client.Keys(search).Result()
+	var cmd *redis.StringSliceCmd
+	if _, err := r.client.Pipelined(func(pipe *redis.Pipeline) error {
+		cmd = pipe.Keys(search)
+		return nil
+	}); err != nil {
+		return nil, errors.Wrap(err, "r.client.Pipelined Keys")
+	}
+
+	slice, err := cmd.Result()
+	if err != nil {
+		return nil, errors.Wrap(err, "r.client.Pipelined Keys")
+	}
+
+	return slice, nil
 }
 
 func (r *rClient) writeUserData(user *types.User) error {
-	if err := r.Client.HMSet(
-		"user-"+user.Type+"-"+user.LoginName+"-"+user.ID.String(),
-		"id", user.ID.String(),
-		"type", user.Type,
-		"username", user.Username,
-		"loginname", user.LoginName,
-		"email", user.Email,
-		"password", user.Password,
-		"salt", user.Salt,
-		"connected", strbool(user.Connected),
-	).Err(); err != nil {
-		return errors.Wrap(err, "r.Client.HMSet")
+	m := map[string]string{
+		"id":        user.ID.String(),
+		"type":      user.Type,
+		"username":  user.Username,
+		"loginname": user.LoginName,
+		"email":     user.Email,
+		"password":  user.Password,
+		"salt":      user.Salt,
+		"connected": strbool(user.Connected),
+	}
+
+	var cmd *redis.StatusCmd
+	if _, err := r.client.Pipelined(func(pipe *redis.Pipeline) error {
+		cmd = pipe.HMSet("user-"+user.Type+"-"+user.LoginName+"-"+user.ID.String(), m)
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "r.client.Pipelined HMSet")
+	}
+
+	if _, err := cmd.Result(); err != nil {
+		return errors.Wrap(err, "r.client.Pipelined HMSet")
 	}
 
 	go r.updateSet("user-"+user.Type+"-"+user.ID.String()+"-rooms", user.Rooms)
@@ -162,8 +229,23 @@ func (r *rClient) writeUserData(user *types.User) error {
 }
 
 func (r *rClient) writeRoomData(room *types.Room) error {
-	if err := r.Client.HMSet("room-"+room.Group+"-"+room.Title+"-info", "title", room.Title, "group", room.Group, "private", strbool(room.Private)).Err(); err != nil {
-		return errors.Wrap(err, "r.Client.HMSet")
+	var (
+		cmd *redis.StatusCmd
+		m   = map[string]string{
+			"title":   room.Title,
+			"group":   room.Group,
+			"private": strbool(room.Private),
+		}
+	)
+	if _, err := r.client.Pipelined(func(pipe *redis.Pipeline) error {
+		cmd = pipe.HMSet("room-"+room.Group+"-"+room.Title+"-info", m)
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "r.client.Pipelined HMSet")
+	}
+
+	if err := cmd.Err(); err != nil {
+		return errors.Wrap(err, "r.client.Pipelined HMSet")
 	}
 
 	var slice []string
@@ -172,13 +254,20 @@ func (r *rClient) writeRoomData(room *types.Room) error {
 	}
 
 	go r.updateSet("room-"+room.Group+"-"+room.Title+"-list", slice)
-
 	return nil
 }
 
 func (r *rClient) writeGroupData(group *types.Group) error {
-	if err := r.Client.HSet("group-"+group.Title+"-info", "title", group.Title).Err(); err != nil {
-		return errors.Wrap(err, "r.Client.HMSet")
+	var cmd *redis.BoolCmd
+	if _, err := r.client.Pipelined(func(pipe *redis.Pipeline) error {
+		cmd = pipe.HSet("group-"+group.Title+"-info", "title", group.Title)
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "r.client.Pipelined HSet")
+	}
+
+	if err := cmd.Err(); err != nil {
+		return errors.Wrap(err, "r.client.Pipelined HSet")
 	}
 
 	var slice []string
@@ -207,9 +296,22 @@ func (r *rClient) getUserData(id string) (*types.User, error) {
 		return nil, nil
 	}
 
-	info, err := r.Client.HGetAllMap(keys[0]).Result()
+	var (
+		userCmd   *redis.StringStringMapCmd
+		roomsCmd  *redis.StringSliceCmd
+		groupsCmd *redis.StringSliceCmd
+	)
+
+	if _, err = r.client.Pipelined(func(pipe *redis.Pipeline) error {
+		userCmd = pipe.HGetAll(keys[0])
+		return nil
+	}); err != nil {
+		return nil, errors.Wrap(err, "r.client.Pipelined HGetAllMap")
+	}
+
+	info, err := userCmd.Result()
 	if err != nil {
-		return nil, errors.Wrap(err, "r.Client.HGetAllMap")
+		return nil, errors.Wrap(err, "r.client.Pipelined HGetAllMap")
 	}
 
 	user := &types.User{
@@ -223,21 +325,28 @@ func (r *rClient) getUserData(id string) (*types.User, error) {
 		Connected: boolstr(info["connected"]),
 	}
 
-	rooms, err := r.Client.SMembers("user-" + user.Type + "-" + user.ID.String() + "-rooms").Result()
-	if err != nil {
-		return nil, errors.Wrap(err, "r.Client.SMembers")
+	if _, err = r.client.Pipelined(func(pipe *redis.Pipeline) error {
+		roomsCmd = pipe.SMembers("user-" + user.Type + "-" + user.ID.String() + "-rooms")
+		groupsCmd = pipe.SMembers("user-" + user.Type + "-" + user.ID.String() + "-groups")
+		return nil
+	}); err != nil {
+		return nil, errors.Wrap(err, "r.client.Pipelined Multi")
 	}
 
-	if len(rooms) > 0 {
+	rooms, err := roomsCmd.Result()
+	if err != nil {
+		return nil, errors.Wrap(err, "r.client.Pipelined SMembers")
+	}
+
+	groups, err := groupsCmd.Result()
+	if err != nil {
+		return nil, errors.Wrap(err, "r.client.Pipelined SMembers")
+	}
+
+	if rooms != nil {
 		user.Rooms = rooms
 	}
-
-	groups, err := r.Client.SMembers("user-" + user.Type + "-" + user.ID.String() + "-groups").Result()
-	if err != nil {
-		return nil, errors.Wrap(err, "r.Client.SMembers")
-	}
-
-	if len(groups) > 0 {
+	if groups != nil {
 		user.Groups = groups
 	}
 
@@ -245,28 +354,44 @@ func (r *rClient) getUserData(id string) (*types.User, error) {
 }
 
 func (r *rClient) getRoomData(gname, rname string) (*types.Room, error) {
-	info, err := r.Client.HGetAllMap("room-" + gname + "-" + rname + "-info").Result()
+	var (
+		infoCmd *redis.StringStringMapCmd
+		list    *redis.StringSliceCmd
+	)
+
+	if _, err := r.client.Pipelined(func(pipe *redis.Pipeline) error {
+		infoCmd = pipe.HGetAll("room-" + gname + "-" + rname + "-info")
+		list = pipe.SMembers("room-" + gname + "-" + rname + "-list")
+		return nil
+	}); err != nil {
+		return nil, errors.Wrap(err, "r.client.Pipelined Multi")
+	}
+
+	info, err := infoCmd.Result()
 	if err != nil {
-		return nil, errors.Wrap(err, "r.Client.HGetAllMap")
+		return nil, errors.Wrap(err, "r.client.Pipelined HGetAll")
+	}
+
+	users, err := list.Result()
+	if err != nil {
+		return nil, errors.Wrap(err, "r.client.Pipelined SMembers")
 	}
 
 	room := &types.Room{
 		Title:   info["title"],
 		Group:   info["group"],
 		Private: boolstr(info["private"]),
+		Users:   make(map[string]*types.User),
 	}
 
-	users, err := r.Client.SMembers("room-" + gname + "-" + rname + "-list").Result()
-	if err != nil {
-		return nil, errors.Wrap(err, "r.Client.SMembers")
-	}
-
-	room.Users = make(map[string]*types.User)
 	if len(users) > 0 {
 		for _, v := range users {
 			u, err := r.getUserData(v)
 			if err != nil {
 				return nil, errors.Wrap(err, "r.getUserData")
+			}
+			if u == nil {
+				return nil, errors.Errorf("No ID found for user %s", v)
 			}
 			room.Users[u.ID.String()] = u
 		}
@@ -282,9 +407,26 @@ func (r *rClient) getGroupData(gname string) (*types.Group, error) {
 		Users: make(map[string]*types.User),
 	}
 
-	users, err := r.Client.SMembers("group-" + gname + "-users").Result()
+	var (
+		usersCmd *redis.StringSliceCmd
+		roomCmd  *redis.StringSliceCmd
+	)
+	if _, err := r.client.Pipelined(func(pipe *redis.Pipeline) error {
+		usersCmd = pipe.SMembers("group-" + gname + "-users")
+		roomCmd = pipe.SMembers("group-" + gname + "-rooms")
+		return nil
+	}); err != nil {
+		return nil, errors.Wrap(err, "r.client.Pipelined Multi")
+	}
+
+	users, err := usersCmd.Result()
 	if err != nil {
-		return nil, errors.Wrap(err, "r.Client.SMembers")
+		return nil, errors.Wrap(err, "r.client.Pipelined SMembers")
+	}
+
+	rooms, err := roomCmd.Result()
+	if err != nil {
+		return nil, errors.Wrap(err, "r.client.Pipelined SMembers")
 	}
 
 	if len(users) > 0 {
@@ -298,14 +440,12 @@ func (r *rClient) getGroupData(gname string) (*types.Group, error) {
 				if err != nil {
 					return nil, errors.Wrap(err, "r.getUserData")
 				}
+				if u == nil {
+					return nil, errors.Errorf("No ID found for user %s", v)
+				}
 				group.Users[u.ID.String()] = u
 			}
 		}
-	}
-
-	rooms, err := r.Client.SMembers("group-" + gname + "-rooms").Result()
-	if err != nil {
-		return nil, errors.Wrap(err, "r.Client.SMembers")
 	}
 
 	if len(rooms) > 0 {
@@ -324,17 +464,36 @@ func (r *rClient) getGroupData(gname string) (*types.Group, error) {
 }
 
 func (r *rClient) deleteUser(user *types.User) error {
-	if err := r.Client.Del("user-" + user.Type + "-" + user.ID.String() + "-groups").Err(); err != nil {
-		return errors.Wrap(err, "r.Client.Del")
+	var (
+		del0 *redis.IntCmd
+		del1 *redis.IntCmd
+		del2 *redis.IntCmd
+	)
+	if _, err := r.client.Pipelined(func(pipe *redis.Pipeline) error {
+		del0 = pipe.Del("user-" + user.Type + "-" + user.ID.String() + "-groups")
+		del1 = pipe.Del("user-" + user.Type + "-" + user.ID.String() + "-rooms")
+		del2 = pipe.Del("user-" + user.Type + "-" + user.LoginName + "-" + user.ID.String())
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "r.client.Pipelined Multi")
 	}
-	if err := r.Client.Del("user-" + user.Type + "-" + user.ID.String() + "-rooms").Err(); err != nil {
-		return errors.Wrap(err, "r.Client.Del")
+
+	if err := del0.Err(); err != nil {
+		return errors.Wrap(err, "r.pipe.Del")
 	}
-	if err := r.Client.Del("user-" + user.Type + "-" + user.LoginName + "-" + user.ID.String()).Err(); err != nil {
-		return errors.Wrap(err, "r.Client.Del")
+	if err := del1.Err(); err != nil {
+		return errors.Wrap(err, "r.pipe.Del")
+	}
+	if err := del2.Err(); err != nil {
+		return errors.Wrap(err, "r.pipe.Del")
 	}
 
 	return nil
+}
+
+// Client returns the underlyins *redis.Client for testing purposes.
+func (r *rClient) Client() *redis.Client {
+	return r.client
 }
 
 // GenRedisProto is an external function that can be used to generate Redis
