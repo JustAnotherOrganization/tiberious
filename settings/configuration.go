@@ -12,27 +12,31 @@ var config *Config
 const usingDefaults = "Using default settings"
 
 // Init loads are configuration data.
-func Init() (string, error) {
+func Init(test bool) (string, error) {
 	/* Set default values then overwrite them with ones in the yml, this way
 	 * if something is missing from the yml the defaults apply properly. */
 	config = &Config{}
 	setDefaults()
-	// If no config file is found set defaults.
-	configfile, err := filepath.Abs("./config.yml")
-	if err != nil {
-		return usingDefaults, err
-	}
-	// If unable to read the file set defaults.
-	configyaml, err := ioutil.ReadFile(configfile)
-	if err != nil {
-		return usingDefaults, err
-	}
-	// If unable to parse the yaml set defaults.
-	if err := yaml.Unmarshal([]byte(configyaml), &config); err != nil {
-		return usingDefaults, err
-	}
 
-	return "Settings loaded from config.yml", nil
+	if !test {
+		// If no config file is found set defaults.
+		configfile, err := filepath.Abs("./config.yml")
+		if err != nil {
+			return usingDefaults, err
+		}
+		// If unable to read the file set defaults.
+		configyaml, err := ioutil.ReadFile(configfile)
+		if err != nil {
+			return usingDefaults, err
+		}
+		// If unable to parse the yaml set defaults.
+		if err := yaml.Unmarshal([]byte(configyaml), &config); err != nil {
+			return usingDefaults, err
+		}
+
+		return "Settings loaded from config.yml", nil
+	}
+	return usingDefaults, nil
 }
 
 func setDefaults() {

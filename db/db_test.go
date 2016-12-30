@@ -1,4 +1,4 @@
-package db
+package db_test
 
 import (
 	"tiberious/types"
@@ -95,6 +95,7 @@ var _ = Describe("db", func() {
 			room, err := f.client.GetRoomData("#testing", "#testing")
 			Expect(err).To(BeNil())
 			Expect(room.Private).To(BeFalse())
+			Expect(room.Users).ToNot(BeEmpty())
 			Expect(room.Users[id.String()].Username).To(Equal(un))
 		})
 	})
@@ -139,7 +140,9 @@ var _ = Describe("db", func() {
 		It("works correctly", func() {
 			group, err := f.client.GetGroupData("#testing")
 			Expect(err).To(BeNil())
+			Expect(group.Rooms).ToNot(BeEmpty())
 			Expect(group.Rooms["#testing"].Title).To(Equal("#testing"))
+			Expect(group.Users).ToNot(BeEmpty())
 			Expect(group.Users[id.String()].Username).To(Equal(un))
 		})
 	})

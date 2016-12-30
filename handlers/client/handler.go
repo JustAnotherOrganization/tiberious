@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -23,6 +24,7 @@ type (
 	// Handler provides access to handler.
 	Handler interface {
 		HandleConnection(conn *websocket.Conn)
+		GetClients() map[string]*types.Client
 	}
 
 	handler struct {
@@ -36,17 +38,7 @@ type (
 )
 
 // NewHandler returns a new Handler using the provided config and clients map.
-func NewHandler(config *settings.Config, clients map[string]*types.Client, log *logrus.Logger) (Handler, error) {
-	dbClient, err := db.NewDB(*config, log)
-	if err != nil {
-		return nil, errors.Wrap(err, "db.NewDB")
-	}
-
-	groupHandler, err := group.NewHandler(*config, dbClient, "#default", "#general")
-	if err != nil {
-		return nil, errors.Wrap(err, "group.NewHandler")
-	}
-
+func NewHandler(config *settings.Config, dbClient db.Client, groupHandler group.Handler, clients map[string]*types.Client, log *logrus.Logger) (Handler, error) {
 	return &handler{
 		config:       config,
 		log:          log,
@@ -164,29 +156,39 @@ func (h *handler) HandleConnection(conn *websocket.Conn) {
 	h.clients[client.User.ID.String()] = client
 
 	if h.config.AllowGuests {
-		defgroup, err := h.groupHandler.GetGroup("#default")
+		var (
+			defgroup *types.Group
+			room     *types.Room
+		)
+		defgroup, err = h.groupHandler.GetGroup("#default")
 		if err != nil {
 			h.log.Error(err)
 		}
 		defgroup.Users[client.User.ID.String()] = client.User
 		client.User.Groups = append(client.User.Groups, "#default")
-		room, err := h.groupHandler.GetRoom("#default", "#general")
+		room, err = h.groupHandler.GetRoom("#default", "#general")
 		if err != nil {
 			h.log.Error(err)
 		}
 		client.User.Rooms = append(client.User.Rooms, "#default/#general")
 		room.Users[client.User.ID.String()] = client.User
 
-		h.dbClient.WriteUserData(client.User)
-		h.dbClient.WriteGroupData(defgroup)
-		h.dbClient.WriteRoomData(room)
+		if err = h.dbClient.WriteUserData(client.User); err != nil {
+			h.log.Error(err)
+		}
+		if err = h.dbClient.WriteGroupData(defgroup); err != nil {
+			h.log.Error(err)
+		}
+		if err = h.dbClient.WriteRoomData(room); err != nil {
+			h.log.Error(err)
+		}
 
 		h.log.Infof("%s %s connected", guest, client.User.ID.String())
 	} else {
 		h.log.Info("new client connected")
 	}
 
-	if err := client.Alert(types.OK, ""); err != nil {
+	if err = client.Alert(types.OK, ""); err != nil {
 		h.log.Error(err)
 	}
 
@@ -194,11 +196,11 @@ func (h *handler) HandleConnection(conn *websocket.Conn) {
 	 * to allow a client to get their UUID back from the server after
 	 * connecting. */
 	if h.config.AllowGuests {
-		if err := client.Alert(types.GeneralNotice, string("Connected as guest with ID "+client.User.ID.String())); err != nil {
+		if err = client.Alert(types.GeneralNotice, fmt.Sprintf("Connected as guest with ID %s", client.User.ID.String())); err != nil {
 			h.log.Error(err)
 		}
 	} else {
-		if err := client.Alert(types.ImportantNotice, "No Guests Allowed : send authentication token to continue"); err != nil {
+		if err = client.Alert(types.ImportantNotice, "No Guests Allowed : send authentication token to continue"); err != nil {
 			h.log.Error(err)
 		}
 	}
@@ -206,7 +208,9 @@ func (h *handler) HandleConnection(conn *websocket.Conn) {
 	/* Never return from this loop!
 	 * Never break from this loop unless intending to disconnect the client. */
 	for {
-		_, rawmsg, err := client.Conn.ReadMessage()
+		var rawmsg []byte
+		_, rawmsg, err = client.Conn.ReadMessage()
+
 		if err != nil {
 			switch {
 			case websocket.IsCloseError(err, websocket.CloseNormalClosure):
@@ -218,19 +222,23 @@ func (h *handler) HandleConnection(conn *websocket.Conn) {
 				break
 			// TODO handle these different cases appropriately.
 			case websocket.IsCloseError(err, websocket.CloseGoingAway):
+				fallthrough
 			case websocket.IsCloseError(err, websocket.CloseProtocolError, websocket.CloseUnsupportedData):
+				fallthrough
 				// This should utilize the ban-score to combat possible spammers
 			case websocket.IsCloseError(err, websocket.ClosePolicyViolation, websocket.CloseMessageTooBig):
 				// These should also utilize the ban-score but with a higher ban
+				fallthrough
 			default:
 				h.log.Info(err)
 			}
 			break
 		}
 
-		ban, err := h.parseMessage(client, rawmsg)
+		var ban int
+		ban, err = h.parseMessage(client, rawmsg)
 		if err != nil {
-			h.log.Info(err)
+			h.log.Error(errors.Wrap(err, "h.parseMessage"))
 		}
 		if ban > 0 {
 			// TODO handle ban-score
@@ -239,15 +247,19 @@ func (h *handler) HandleConnection(conn *websocket.Conn) {
 	}
 
 	// We broke out of the loop so disconnect the client.
-	client.Conn.Close()
+	if err = client.Conn.Close(); err != nil {
+		h.log.Error(err)
+	}
 	if client.User != nil {
 		if client.User.Type == guest {
-			if err := h.dbClient.DeleteUser(client.User); err != nil {
+			if err = h.dbClient.DeleteUser(client.User); err != nil {
 				h.log.Error(err)
 			}
 		} else {
 			client.User.Connected = false
-			h.dbClient.WriteUserData(client.User)
+			if err = h.dbClient.WriteUserData(client.User); err != nil {
+				h.log.Error(err)
+			}
 		}
 	}
 
@@ -279,4 +291,9 @@ func (h *handler) GetClientsForUsers(users []*types.User) []*types.Client {
 	}
 
 	return ret
+}
+
+// GetClients returns all the connected Clients
+func (h *handler) GetClients() map[string]*types.Client {
+	return h.clients
 }

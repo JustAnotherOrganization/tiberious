@@ -34,7 +34,7 @@ type Config struct {
 	/* DatabaseUser represents the user to be used in the database connection.
 	 * For Redis, it should be set to the database number to use in redis.
 	 * Unless using redis for something else 0 should suffice. */
-	DatabaseUser int64 `yaml:"databaseuser"`
+	DatabaseUser int `yaml:"databaseuser"`
 	// Log allows setting a file location for logging.
 	Log string `yaml:"log"`
 	// AllowGuests determines if guest connections are allowed, default is true

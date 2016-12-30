@@ -6,12 +6,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-// GetGroup check if a group exists and if so return it
+// GetGroup check if a group exists and if so return it.
 func (h *handler) GetGroup(gname string) (*types.Group, error) {
 	gexists, err := h.dbClient.GroupExists(gname)
 	if err != nil {
 		return nil, errors.Wrap(err, "dbClient.GroupExists")
 	}
+
 	if !gexists {
 		return nil, nil
 	}
@@ -24,13 +25,13 @@ func (h *handler) GetGroup(gname string) (*types.Group, error) {
 	return group, nil
 }
 
-// GetNewGroup should ony be used if the group doesn't already exist
+// GetNewGroup should ony be used if the group doesn't already exist.
 func (*handler) GetNewGroup(gname string) *types.Group {
-	group := new(types.Group)
-	group.Title = gname
-	group.Rooms = make(map[string]*types.Room)
-	group.Users = make(map[string]*types.User)
-	return group
+	return &types.Group{
+		Title: gname,
+		Rooms: make(map[string]*types.Room),
+		Users: make(map[string]*types.User),
+	}
 }
 
 // WriteGroupData writes the given group object to the current database.

@@ -4,6 +4,9 @@ import (
 	"strings"
 	"tiberious/settings"
 	"tiberious/types"
+	"time"
+
+	"gopkg.in/redis.v5"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
@@ -13,11 +16,16 @@ var (
 	// ErrInvalidConfig is returned when the database is improperly setup and
 	// no data can be written. This should never occur.
 	ErrInvalidConfig = errors.New("Invalid config: no data written")
+
+	// TestMode sets the db package to perform a few things differently then
+	// it would otherwise.
+	TestMode bool
 )
 
 type (
 	// Client provides access to the database
 	Client interface {
+		Shutdown()
 		GetKeySet(search string) ([]string, error)
 		WriteUserData(user *types.User) error
 		WriteRoomData(room *types.Room) error
@@ -29,10 +37,12 @@ type (
 		GetRoomData(gname, rname string) (*types.Room, error)
 		GetGroupData(gname string) (*types.Group, error)
 		DeleteUser(user *types.User) error
+
+		RedisClient() *redis.Client
 	}
 
 	dbClient struct {
-		config settings.Config
+		config *settings.Config
 
 		rdis rdisClient
 		log  *logrus.Logger
@@ -40,9 +50,9 @@ type (
 )
 
 // NewDB returns a new database client
-func NewDB(c settings.Config, log *logrus.Logger) (Client, error) {
+func NewDB(config *settings.Config, log *logrus.Logger) (Client, error) {
 	client := &dbClient{
-		config: c,
+		config: config,
 		log:    log,
 	}
 
@@ -57,7 +67,23 @@ func NewDB(c settings.Config, log *logrus.Logger) (Client, error) {
 		client.log.Infof("User database started on redis db %d", client.config.DatabaseUser)
 	}
 
+	if !TestMode {
+		if err := client.rdis.Client().SetNX("created", time.Now().String(), 0).Err(); err != nil {
+			return client, errors.Wrap(err, "cliend.rdis.Client().SetNX")
+		}
+	}
+
 	return client, nil
+}
+
+// Shutdown saves and quits database.
+func (db *dbClient) Shutdown() {
+	switch {
+	case db.config.UserDatabase == 0:
+		db.rdis.shutdown()
+	default:
+		break
+	}
 }
 
 // GetKeySet returns all the keys that match a given search pattern.
@@ -214,4 +240,9 @@ func (db *dbClient) DeleteUser(user *types.User) error {
 	default:
 		return ErrInvalidConfig
 	}
+}
+
+// RedisClient returns the underlying *redis.Client for testing.
+func (db *dbClient) RedisClient() *redis.Client {
+	return db.rdis.Client()
 }

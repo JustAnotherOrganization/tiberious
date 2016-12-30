@@ -6,6 +6,7 @@ import (
 	"tiberious/settings"
 	"tiberious/types"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
 )
 
@@ -22,7 +23,8 @@ type (
 	}
 
 	handler struct {
-		config   settings.Config
+		config   *settings.Config
+		log      *logrus.Logger
 		dbClient db.Client
 
 		// TODO implement multiple groups
@@ -32,13 +34,15 @@ type (
 
 // NewHandler returns a new Handler using the provided config, dbClient and
 // default group and room names.
-func NewHandler(config settings.Config, dbClient db.Client, defGroupName, genRoomName string) (Handler, error) {
+func NewHandler(config *settings.Config, dbClient db.Client, log *logrus.Logger, defGroupName, genRoomName string) (Handler, error) {
 	h := &handler{
 		config:   config,
+		log:      log,
 		dbClient: dbClient,
 	}
 
 	defgroup := h.GetNewGroup(defGroupName)
+
 	if err := h.WriteGroupData(defgroup); err != nil {
 		return nil, errors.Wrap(err, "WriteGroupData")
 	}
