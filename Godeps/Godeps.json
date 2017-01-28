@@ -9,6 +9,16 @@
 			"Rev": "6d9ae300aaf85d6acd2e5424081c7fcddb21dab8"
 		},
 		{
+			"ImportPath": "github.com/ant0ine/go-json-rest/rest",
+			"Comment": "v3.3.1-5-gcfd0da1",
+			"Rev": "cfd0da14df1db088980175e1c3c7e77c11b90718"
+		},
+		{
+			"ImportPath": "github.com/ant0ine/go-json-rest/rest/trie",
+			"Comment": "v3.3.1-5-gcfd0da1",
+			"Rev": "cfd0da14df1db088980175e1c3c7e77c11b90718"
+		},
+		{
 			"ImportPath": "github.com/gorilla/websocket",
 			"Rev": "e2e3d8414d0fbae04004f151979f4e27c6747fe7"
 		},
@@ -31,18 +41,34 @@
 			"Rev": "d4feaf1a7e61e1d9e79e6c4e76c6349e9cab0a03"
 		},
 		{
-			"ImportPath": "gopkg.in/bsm/ratelimit.v1",
-			"Rev": "db14e161995a5177acef654cb0dd785e8ee8bc22"
+			"ImportPath": "gopkg.in/redis.v5",
+			"Comment": "v5.1.6",
+			"Rev": "b7bae3a78050e2e7ec2130a05cde296a9ff2e9c0"
 		},
 		{
-			"ImportPath": "gopkg.in/redis.v3",
-			"Comment": "v3.6.0",
-			"Rev": "d2ae7d870764d131887fa31a743bb50abbcf9384"
+			"ImportPath": "gopkg.in/redis.v5/internal",
+			"Comment": "v5.1.6",
+			"Rev": "b7bae3a78050e2e7ec2130a05cde296a9ff2e9c0"
 		},
 		{
-			"ImportPath": "gopkg.in/redis.v3/internal/consistenthash",
-			"Comment": "v3.6.0",
-			"Rev": "d2ae7d870764d131887fa31a743bb50abbcf9384"
+			"ImportPath": "gopkg.in/redis.v5/internal/consistenthash",
+			"Comment": "v5.1.6",
+			"Rev": "b7bae3a78050e2e7ec2130a05cde296a9ff2e9c0"
+		},
+		{
+			"ImportPath": "gopkg.in/redis.v5/internal/hashtag",
+			"Comment": "v5.1.6",
+			"Rev": "b7bae3a78050e2e7ec2130a05cde296a9ff2e9c0"
+		},
+		{
+			"ImportPath": "gopkg.in/redis.v5/internal/pool",
+			"Comment": "v5.1.6",
+			"Rev": "b7bae3a78050e2e7ec2130a05cde296a9ff2e9c0"
+		},
+		{
+			"ImportPath": "gopkg.in/redis.v5/internal/proto",
+			"Comment": "v5.1.6",
+			"Rev": "b7bae3a78050e2e7ec2130a05cde296a9ff2e9c0"
 		},
 		{
 			"ImportPath": "gopkg.in/yaml.v2",
