@@ -43,11 +43,12 @@ func main() {
 	}
 	defer db.Close()
 
-	t, err := tiberious.New(log, db)
+	// A nil config will cause Tiberious to use the default configuration.
+	t, err := tiberious.New(log, db, nil)
 	if err != nil {
 		log.Error(err)
 		return
 	}
 
-	log.Error(t.StartGRPC(*grpcAddr))
+	log.Error(t.Start(*grpcAddr))
 }

@@ -64,18 +64,17 @@ func (cm *clientManager) newGuestID() (string, error) {
 	return fmt.Sprintf("guest%d", id), nil
 }
 
-func (cm *clientManager) registerClient(clientID string, stream pb.Tiberious_StartStreamServer) *client {
+func (cm *clientManager) registerClient(clientID string, stream pb.Tiberious_StartStreamServer) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
 	// TODO: refuse to register a client without a stream...
 	// requires figuring out how to pass a stream from the internal tests...
 
-	client := &client{
+	cm.clients[clientID] = &client{
 		stream: stream,
 	}
-	cm.clients[clientID] = client
-	return client
+	return
 }
 
 func (cm *clientManager) getClient(clientID string) *client {
@@ -88,4 +87,11 @@ func (cm *clientManager) getClient(clientID string) *client {
 	}
 
 	return client
+}
+
+func (cm *clientManager) removeClient(clientID string) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	delete(cm.clients, clientID)
 }

@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/justanotherorganization/tiberious/netstuffs"
@@ -29,22 +30,25 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// FIXME: add proper shutdown/stop functionality
+
 type (
 	// Tiberious provides access to the underlying server.
 	Tiberious interface {
 		pb.TiberiousServer
 
-		StartGRPC(string) error
+		Start(string) error
 	}
 
 	tiberious struct {
-		log    *logrus.Entry
-		db     *sql.DB
-		config *Config
-		cm     *clientManager
+		log              *logrus.Entry
+		db               *sql.DB
+		config           *Config
+		cm               *clientManager
+		incomingMessages chan ioMessage
+		outgoingMessages chan ioMessage
+		wg               *sync.WaitGroup
 
-		// Tiberious can run with only some connections enabled, because of
-		// that some of these can and will be nil in certain situations.
 		grpcServer netstuffs.GRPCServer
 	}
 )
@@ -65,16 +69,25 @@ func New(log *logrus.Entry, db *sql.DB, config *Config) (Tiberious, error) {
 		config = NewConfig()
 	}
 
+	wg := &sync.WaitGroup{}
+
 	return &tiberious{
-		log:    log,
-		db:     db,
-		config: config,
-		cm:     newClientManager(log, db),
+		log:              log,
+		db:               db,
+		config:           config,
+		cm:               newClientManager(log, db),
+		incomingMessages: make(chan ioMessage),
+		outgoingMessages: make(chan ioMessage),
+		wg:               wg,
 	}, nil
 }
 
 // StartGRPC starts a GRPC server.
-func (t *tiberious) StartGRPC(address string) error {
+func (t *tiberious) Start(address string) error {
+	t.log.Infof("starting manageMessagesRoutine")
+	t.wg.Add(1)
+	go t.manageMessagesRoutine()
+
 	t.log.Infof("starting grpc server on %s", address)
 	t.grpcServer = netstuffs.New(address)
 	pb.RegisterTiberiousServer(t.grpcServer.Server(), t)
@@ -82,22 +95,40 @@ func (t *tiberious) StartGRPC(address string) error {
 }
 
 func (t *tiberious) StartStream(stream pb.Tiberious_StartStreamServer) error {
-	//var _client *client
+	var cid string
 	// TODO:
 	// If guests are enabled create a guest ID and register a client with the
 	// cm. Otherwise require authentication before registering a client with
 	// the cm.
 	needsAuth := true
 	if t.config.EnableGuests {
-		cid, err := t.cm.newGuestID()
+		var err error
+		cid, err = t.cm.newGuestID()
 		if err != nil {
 			return status.Error(codes.Internal, errors.Wrap(err, "cm.newGuestID").Error())
 		}
 
-		// FIXME: this should set client...
-		_ = t.cm.registerClient(cid, stream)
+		t.cm.registerClient(cid, stream)
 		needsAuth = false
 	}
+
+	defer func() {
+		if cid != "" {
+			t.cm.removeClient(cid)
+		}
+	}()
+
+	go func() {
+		for out := range t.outgoingMessages {
+			if err := stream.Send(&pb.StreamMessage{
+				StreamMessage: &pb.StreamMessage_ClientMessage{
+					ClientMessage: out.message,
+				},
+			}); err != nil {
+				t.log.Error(errors.Wrap(err, "stream.Send"))
+			}
+		}
+	}()
 
 	for {
 		in, err := stream.Recv()
@@ -123,7 +154,7 @@ func (t *tiberious) StartStream(stream pb.Tiberious_StartStreamServer) error {
 
 			// Either guest access is enabled or the user is authenticated
 			// so we pass the message onto the message manager.
-			t.log.Info(msg)
+			t.incomingMessages <- ioMessage{clintID: cid, message: msg}
 		}
 	}
 }
@@ -135,8 +166,7 @@ func (t *tiberious) NewConversation(ctx context.Context, request *pb.NewConversa
 
 	ts := pb.NewTimestamp(time.Now())
 	response = &pb.Conversation{
-		Created:    ts,
-		TimeOfLast: ts,
+		Created: ts,
 	}
 
 	byt, err := json.Marshal(response)

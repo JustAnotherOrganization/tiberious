@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"flag"
+	"io"
 	"testing"
 
 	"github.com/jackc/pgx"
@@ -13,6 +14,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestTiberious(t *testing.T) {
@@ -35,6 +38,8 @@ type fixture struct {
 	conn      *grpc.ClientConn
 	client    pb.TiberiousClient
 	stream    pb.Tiberious_StartStreamClient
+	responses []*pb.StreamMessage
+	count     int
 	db        *sql.DB
 }
 
@@ -62,9 +67,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).To(BeNil())
 
 	go func() {
-		if err := f.tiberious.StartGRPC(*grpcAddr); err != nil {
-			panic(err)
-		}
+		Expect(f.tiberious.Start(*grpcAddr)).To(BeNil())
 	}()
 
 	f.conn, err = grpc.Dial(*grpcAddr, grpc.WithInsecure())
@@ -73,10 +76,32 @@ var _ = BeforeSuite(func() {
 	f.client = pb.NewTiberiousClient(f.conn)
 	f.stream, err = f.client.StartStream(context.Background())
 	Expect(err).To(BeNil())
+
+	f.responses = []*pb.StreamMessage{}
+	go func() {
+		for {
+			in, err := f.stream.Recv()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+
+				// An error is thrown during shutdown of the tests.
+				stat, ok := status.FromError(err)
+				Expect(ok).To(BeTrue())
+				Expect(stat.Code()).To(Equal(codes.Unavailable))
+			}
+			if in != nil {
+				f.responses = append(f.responses, in)
+			}
+		}
+	}()
 })
 
 var _ = AfterSuite(func() {
 	Expect(f.stream.CloseSend()).To(BeNil())
 	Expect(f.conn.Close()).To(BeNil())
 	Expect(f.db.Close()).To(BeNil())
+
+	Expect(len(f.responses)).To(Equal(f.count))
 })

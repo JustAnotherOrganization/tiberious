@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/stdlib"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -31,6 +32,10 @@ var f fixture
 // TestMain sets up a DB for running internal tests separate from the external
 // GRPC API tests.
 func TestMain(m *testing.M) {
+	logger := logrus.New()
+	log := logrus.NewEntry(logger)
+
+	log.Infoln("Starting internal tests")
 	flag.Parse()
 
 	driverConfig := stdlib.DriverConfig{
@@ -49,7 +54,9 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	defer f.db.Close()
 
-	os.Exit(m.Run())
+	x := m.Run()
+	f.db.Close()
+
+	os.Exit(x)
 }
