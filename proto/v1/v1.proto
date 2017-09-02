@@ -3,6 +3,9 @@ syntax = "proto3";
 package tiberious.v1;
 option go_package = "v1";
 
+import "github.com/golang/protobuf/ptypes/timestamp/timestamp.proto";
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
 // Tiberious defines the gRPC state of Tiberious.
 service Tiberious {
     // StartStream starts a bi-directional stream.
@@ -13,34 +16,13 @@ service Tiberious {
 
 // Meta provides the meta data for Tiberious messages.
 message Meta {
-    Timestamp time = 1;
-}
-
-// Signatures houses the signatures for a message.
-message Signatures {
-    bytes original_signer = 1;
-    repeated bytes secondary_signers = 2;
-}
-
-// SEE: google/protobuf/timestamp.proto
-message Timestamp {
-    // Represents seconds of UTC time since Unix epoch
-    // 1970-01-01T00:00:00Z. Must be from from 0001-01-01T00:00:00Z to
-    // 9999-12-31T23:59:59Z inclusive.
-    int64 seconds = 1;
-
-    // Non-negative fractions of a second at nanosecond resolution. Negative
-    // second values with fractions must still have non-negative nanos values
-    // that count forward in time. Must be from 0 to 999,999,999
-    // inclusive.
-    int32 nanos = 2;
+    google.protobuf.Timestamp created = 1;
 }
 
 // ClientMessage is a message sent from a client to a server, this may
 // contain information for the server or another client.
 message ClientMessage {
     Meta meta = 1;
-    Signatures signatures = 2;
 
     int64 conversation_id = 10;
     bytes data = 11;
@@ -66,7 +48,6 @@ message StreamMessage {
 // NewConversationRequest is a requet to start a new Conversation.
 message NewConversationRequest {
     Meta meta = 1;
-    Signatures signatures = 2;
 
     // participants should be obfuscated, either using a temporary ID
     // or similar...
@@ -76,6 +57,6 @@ message NewConversationRequest {
 // Conversation represents a Tiberious conversation.
 message Conversation {
     int64 id = 1;
-    Timestamp created = 2;
-    Timestamp time_of_last = 3;
+    google.protobuf.Timestamp created = 2;
+    google.protobuf.Timestamp time_of_last = 3;
 }

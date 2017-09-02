@@ -12,6 +12,7 @@
 package v1
 
 import (
+	"errors"
 	"time"
 )
 
@@ -23,8 +24,22 @@ func NewTimestamp(t time.Time) *Timestamp {
 	}
 }
 
+// Validate a Meta struct.
+func (m *Meta) Validate() error {
+	if m.Time == nil {
+		return errors.New("Time cannot be nil")
+	}
+
+	// TODO: check timestamp isn't outside of "safe" range.
+
+	return nil
+}
+
 // Validate a NewConversationRequest.
 func (r *NewConversationRequest) Validate() error {
-	// TODO: confirm the signature and timestamp data match up.
+	if err := r.Meta.Validate(); err != nil {
+		return err
+	}
+
 	return nil
 }

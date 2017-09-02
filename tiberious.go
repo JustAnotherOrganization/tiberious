@@ -118,6 +118,7 @@ func (t *tiberious) StartStream(stream pb.Tiberious_StartStreamServer) error {
 		}
 	}()
 
+	// TODO: collapse these into a single loop?
 	go func() {
 		for out := range t.outgoingMessages {
 			if err := stream.Send(&pb.StreamMessage{
