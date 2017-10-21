@@ -1,0 +1,25 @@
+package: github.com/justanotherorganization/tiberious
+import:
+- package: github.com/buger/goterm
+- package: github.com/gogo/protobuf
+  subpackages:
+  - gogoproto
+  - proto
+- package: github.com/golang/protobuf
+  subpackages:
+  - ptypes/timestamp
+- package: github.com/jackc/pgx
+  subpackages:
+  - stdlib
+- package: github.com/pkg/errors
+- package: github.com/sirupsen/logrus
+- package: golang.org/x/net
+  subpackages:
+  - context
+- package: google.golang.org/grpc
+  subpackages:
+  - codes
+  - status
+testImport:
+- package: github.com/onsi/ginkgo
+- package: github.com/onsi/gomega
